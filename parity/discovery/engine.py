@@ -49,6 +49,13 @@ def score_candidate(subject: PropertyRef, candidate: PropertyRef) -> tuple[float
         score += 2
         reasons.append("previously discovered local candidate (+2)")
 
+    if candidate.extra.get("licence_search_hit") is True:
+        score += 40
+        reasons.append("found by exact licence web search; identity still unproven (+40)")
+    elif candidate.extra.get("web_search_hits"):
+        score += 5
+        reasons.append("found by title web search (+5)")
+
     subject_title = _normalise_title(subject.title)
     candidate_title = _normalise_title(candidate.title)
     if subject_title and candidate_title:

@@ -71,6 +71,10 @@ class BrowserSession:
         self._context: Optional[BrowserContext] = None
         self.browser_channel: str | None = None
 
+    @property
+    def headless(self) -> bool:
+        return self._headless
+
     def _channel_profile_dir(self, channel: str | None) -> Path:
         if self._profile_dir is not None:
             return self._profile_dir

@@ -51,6 +51,10 @@ DEFAULT_REQUEST_BUDGETS: dict[tuple[str, str], int] = {
     ("expedia_group", "image"): 40,
     ("marriott", "page"): 1,
     ("marriott", "image"): 40,
+    # Licence-first reverse web search (parity/discovery/web_search.py).
+    ("bing", "search"): 8,
+    ("duckduckgo", "search"): 8,
+    ("google", "search"): 8,
 }
 
 _AIRBNB_HOST_RE = re.compile(r"^(?:www\.)?airbnb\.[a-z]{2,3}(?:\.[a-z]{2})?$")

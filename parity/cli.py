@@ -55,6 +55,11 @@ from parity.http_control import (
     RequestGovernor,
 )
 from parity.discovery.engine import DiscoveryEngine, canonicalize_url
+from parity.discovery.web_search import (
+    PrecomputedProvider,
+    WebLicenceSearchProvider,
+    registration_variants,
+)
 from parity.discovery.providers import (
     AirbnbMapProvider,
     BookingSearchProvider,
@@ -851,7 +856,7 @@ def _cmd_discover(args: argparse.Namespace) -> int:
                 return 2
             if "airbnb" in requested_channels:
                 providers.append(AirbnbMapProvider(client))
-            if "booking" in requested_channels:
+            if requested_channels:
                 with _maybe_browser_session(
                     ["https://www.booking.com/"],
                     headless=args.headless,
@@ -861,7 +866,14 @@ def _cmd_discover(args: argparse.Namespace) -> int:
                     fixture_ttl_days=args.fixture_ttl_days,
                     governor=client.governor,
                 ) as browser_session:
-                    providers.append(BookingSearchProvider(browser_session))
+                    if not args.no_web_search:
+                        providers.insert(1, WebLicenceSearchProvider(
+                            browser_session,
+                            interactive=not args.headless,
+                            notify=lambda message: print(message, file=sys.stderr),
+                        ))
+                    if "booking" in requested_channels:
+                        providers.append(BookingSearchProvider(browser_session))
                     report = DiscoveryEngine(
                         providers,
                         limit_per_site=args.limit_per_site,
@@ -882,6 +894,34 @@ def _cmd_discover(args: argparse.Namespace) -> int:
     else:
         print(rendered)
     return 0
+
+
+def _run_web_licence_search(args, subject, browser_session, known_sites, providers) -> set[str]:
+    """Run licence-first web search once; return the channels it surfaced."""
+    if getattr(args, "no_web_search", False) or browser_session is None:
+        return set()
+    if {"airbnb", "booking"} <= set(known_sites):
+        return set()
+    provider = WebLicenceSearchProvider(
+        browser_session,
+        interactive=not args.headless,
+        notify=lambda message: print(message, file=sys.stderr),
+    )
+    print(
+        "[parity] searching the web for the licence number"
+        f" ({', '.join(registration_variants(subject)) or 'none published; title search only'})",
+        file=sys.stderr,
+    )
+    try:
+        result = provider.discover(subject)
+    except Exception as error:  # reported in diagnostics; fallbacks still run
+        print(f"[parity] web licence search failed: {error}", file=sys.stderr)
+        providers.append(PrecomputedProvider(provider.name, None, error=str(error)))
+        return set()
+    for outcome in provider.outcomes:
+        print(f"[parity] web search: {outcome.line()}", file=sys.stderr)
+    providers.append(PrecomputedProvider(provider.name, result))
+    return {ref.site for ref in result.refs}
 
 
 def _automatic_placeholder_result(
@@ -979,9 +1019,14 @@ def _cmd_auto(args: argparse.Namespace) -> int:
                             file=sys.stderr,
                         )
                         providers.append(HistoricalEvidenceProvider(historical))
-                    if "airbnb" not in known_sites:
+                    web_sites = _run_web_licence_search(
+                        args, subject, browser_session, known_sites, providers
+                    )
+                    # Map/OTA-internal search is the fallback for any channel
+                    # the exact licence/title web search did not surface.
+                    if "airbnb" not in known_sites | web_sites:
                         providers.append(AirbnbMapProvider(client))
-                    if "booking" not in known_sites:
+                    if "booking" not in known_sites | web_sites:
                         providers.append(BookingSearchProvider(browser_session))
                     discovery = DiscoveryEngine(
                         providers,
@@ -1933,6 +1978,11 @@ def main(argv: list[str] | None = None) -> int:
     p_auto.add_argument("--force", action="store_true")
     p_auto.add_argument("--headless", action="store_true", default=False)
     p_auto.add_argument(
+        "--no-web-search",
+        action="store_true",
+        help="Skip licence-first Bing/DuckDuckGo/Google search (use map/OTA search only)",
+    )
+    p_auto.add_argument(
         "--compact",
         action="store_true",
         help="Open the finished dashboard in a 540 x 760 Edge app window",
@@ -2008,6 +2058,11 @@ def main(argv: list[str] | None = None) -> int:
     p_discover.add_argument("--limit-per-site", type=int, default=5)
     p_discover.add_argument("--db", default=".parity/parity.db")
     p_discover.add_argument("--headless", action="store_true", default=False)
+    p_discover.add_argument(
+        "--no-web-search",
+        action="store_true",
+        help="Skip licence-first Bing/DuckDuckGo/Google search (use map/OTA search only)",
+    )
     p_discover.add_argument("--format", choices=["console", "json"], default="console")
     p_discover.add_argument(
         "--output",
