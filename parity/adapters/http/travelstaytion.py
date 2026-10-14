@@ -50,6 +50,13 @@ _HEADERS = {
 }
 
 
+def _published_count(value):
+    """TravelStaytion publishes 0 when a count was never filled in."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        return None
+    return value
+
+
 class TravelStaytionAdapter(HttpOnly):
     site = "travelstaytion"
 
@@ -105,9 +112,9 @@ class TravelStaytionAdapter(HttpOnly):
             country=prop.get("country"),
             city=prop.get("city"),
             postcode=prop.get("postcode"),
-            bedrooms=prop.get("bedrooms"),
-            bathrooms=prop.get("bathrooms"),
-            capacity=prop.get("capacity"),
+            bedrooms=_published_count(prop.get("bedrooms")),
+            bathrooms=_published_count(prop.get("bathrooms")),
+            capacity=_published_count(prop.get("capacity")),
             title=prop.get("name") or prop.get("title"),
             property_type=prop.get("propertyType"),
             amenities=amenity_names,

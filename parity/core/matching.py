@@ -153,8 +153,16 @@ class PhotoMatchSummary:
     candidate_unique: int
 
 
+def known_count(value) -> bool:
+    """True for a usable room/guest count; None and 0 mean "not published"."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
+
+
 def structural_conflicts(subject, candidate) -> list[str]:
     """Return material configuration conflicts between two listing records.
+
+    A missing or zero count is unknown, not a conflict: TravelStaytion pages
+    sometimes publish 0 bedrooms/bathrooms for listings that clearly have them.
 
     Titles and property-type wording are deliberately excluded because channel
     marketing labels vary.  A bedroom mismatch, a capacity difference of two
@@ -163,24 +171,24 @@ def structural_conflicts(subject, candidate) -> list[str]:
     """
     conflicts: list[str] = []
     if (
-        subject.bedrooms is not None
-        and candidate.bedrooms is not None
+        known_count(subject.bedrooms)
+        and known_count(candidate.bedrooms)
         and subject.bedrooms != candidate.bedrooms
     ):
         conflicts.append(
             f"bedrooms conflict: subject {subject.bedrooms}, candidate {candidate.bedrooms}"
         )
     if (
-        subject.capacity is not None
-        and candidate.capacity is not None
+        known_count(subject.capacity)
+        and known_count(candidate.capacity)
         and abs(subject.capacity - candidate.capacity) >= 2
     ):
         conflicts.append(
             f"capacity conflict: subject {subject.capacity}, candidate {candidate.capacity}"
         )
     if (
-        subject.bathrooms is not None
-        and candidate.bathrooms is not None
+        known_count(subject.bathrooms)
+        and known_count(candidate.bathrooms)
         and abs(subject.bathrooms - candidate.bathrooms) >= 1.0
     ):
         conflicts.append(
@@ -204,8 +212,8 @@ def split_structural_conflicts(subject, candidate) -> tuple[list[str], list[str]
             soft.append(item)
         elif (
             item.startswith("capacity")
-            and subject.capacity is not None
-            and candidate.capacity is not None
+            and known_count(subject.capacity)
+            and known_count(candidate.capacity)
             and abs(subject.capacity - candidate.capacity) == 2
         ):
             soft.append(item)

@@ -6,6 +6,7 @@ from difflib import SequenceMatcher
 from typing import Protocol
 from urllib.parse import urlsplit, urlunsplit
 
+from parity.core.matching import known_count
 from parity.core.models import (
     DiscoveryCandidate,
     DiscoveryReport,
@@ -76,7 +77,7 @@ def score_candidate(subject: PropertyRef, candidate: PropertyRef) -> tuple[float
         score += title_points
         reasons.append(f"title similarity {similarity:.2f} (+{title_points})")
 
-    if subject.bedrooms is not None and candidate.bedrooms is not None:
+    if known_count(subject.bedrooms) and known_count(candidate.bedrooms):
         if subject.bedrooms == candidate.bedrooms:
             score += 20
             reasons.append("bedrooms exact (+20)")
@@ -84,7 +85,7 @@ def score_candidate(subject: PropertyRef, candidate: PropertyRef) -> tuple[float
             score -= 25
             reasons.append("bedrooms conflict (-25)")
 
-    if subject.bathrooms is not None and candidate.bathrooms is not None:
+    if known_count(subject.bathrooms) and known_count(candidate.bathrooms):
         difference = abs(subject.bathrooms - candidate.bathrooms)
         if difference == 0:
             score += 15
@@ -96,7 +97,7 @@ def score_candidate(subject: PropertyRef, candidate: PropertyRef) -> tuple[float
             score -= 15
             reasons.append("bathrooms conflict (-15)")
 
-    if subject.capacity is not None and candidate.capacity is not None:
+    if known_count(subject.capacity) and known_count(candidate.capacity):
         if subject.capacity == candidate.capacity:
             score += 15
             reasons.append("capacity exact (+15)")

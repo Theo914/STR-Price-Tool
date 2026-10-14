@@ -107,7 +107,8 @@ class AirbnbMapProvider:
             self.client,
             subject.lat,
             subject.lng,
-            subject.bedrooms,
+            # Unknown/unpublished bedrooms: search without a bedroom floor.
+            subject.bedrooms or 0,
             max_pages=self.max_pages_per_radius,
             max_distance_km=radius_km,
             amenity_ids=None,
@@ -126,8 +127,8 @@ class AirbnbMapProvider:
         return refs, trace, parse_failures
 
     def discover(self, subject: PropertyRef) -> ProviderDiscoveryResult:
-        if subject.lat is None or subject.lng is None or subject.bedrooms is None:
-            raise ValueError("Airbnb map discovery requires subject coordinates and bedrooms")
+        if subject.lat is None or subject.lng is None:
+            raise ValueError("Airbnb map discovery requires subject coordinates")
         refs, first_trace, first_failures = self._search(subject, self.initial_radius_km)
         traces = [first_trace]
         parse_failures = first_failures

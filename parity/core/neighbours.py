@@ -142,7 +142,7 @@ def _iter_search_results(
     # London (52N) only reached ~1.85 km east-west.
     lng_delta = delta / max(math.cos(math.radians(lat)), 0.1)
     params_base = {
-        "min_bedrooms": bedrooms,
+        "min_bedrooms": bedrooms or 0,
         "room_types[]": "Entire home/apt",
         "ne_lat": lat + delta,
         "ne_lng": lng + lng_delta,

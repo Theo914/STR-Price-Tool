@@ -435,3 +435,40 @@ def test_one_transient_network_failure_is_retried_for_gets(tmp_path, monkeypatch
         with pytest.raises(httpx.ConnectTimeout):
             client.request("POST", "https://www.airbnb.com/api/v3/x")
         assert calls["n"] == 1
+
+
+def test_zero_counts_from_travelstaytion_are_unknown_not_conflicts():
+    from parity.adapters.http.travelstaytion import _published_count
+    from parity.core.matching import split_structural_conflicts, structural_conflicts
+    from parity.discovery.engine import score_candidate
+
+    assert [_published_count(v) for v in (0, 0.0, None, True, 3, 1.5)] == [None, None, None, None, 3, 1.5]
+
+    subject = PropertyRef(site="travelstaytion", raw_id="1", url="u", bedrooms=0, bathrooms=0, capacity=0)
+    candidate = PropertyRef(site="airbnb", raw_id="2", url="v", bedrooms=3, bathrooms=2, capacity=6)
+    assert structural_conflicts(subject, candidate) == []
+    assert split_structural_conflicts(subject, candidate) == ([], [])
+    # Zero on the candidate side is ignored too, and ranking is not penalised.
+    assert structural_conflicts(candidate, subject) == []
+    assert all("conflict" not in reason for reason in score_candidate(subject, candidate)[1])
+    # Real counts still conflict.
+    real = PropertyRef(site="travelstaytion", raw_id="1", url="u", bedrooms=2)
+    assert structural_conflicts(real, candidate) == ["bedrooms conflict: subject 2, candidate 3"]
+
+
+def test_map_discovery_runs_when_bedrooms_are_unpublished():
+    from urllib.parse import parse_qs, urlsplit
+
+    from parity.discovery.providers import AirbnbMapProvider
+
+    seen = []
+
+    def handler(request):
+        seen.append(parse_qs(urlsplit(str(request.url)).query))
+        return httpx.Response(200, text="<html></html>", headers={"content-type": "text/html"})
+
+    provider = AirbnbMapProvider(httpx.Client(transport=httpx.MockTransport(handler)))
+    subject = PropertyRef(site="travelstaytion", raw_id="1", url="u", lat=48.85, lng=2.34, bedrooms=None)
+    with pytest.raises(RuntimeError):  # stub page has no results; the request is what matters
+        provider.discover(subject)
+    assert seen and seen[0]["min_bedrooms"] == ["0"]
