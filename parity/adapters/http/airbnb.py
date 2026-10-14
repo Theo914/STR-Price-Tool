@@ -604,6 +604,9 @@ class AirbnbAdapter(HttpOnly):
 
         lat = _find_key(state, "lat")
         lng = _find_key(state, "lng")
+        if lat is None or lng is None:
+            lat = _find_key(state, "latitude")
+            lng = _find_key(state, "longitude")
         title = _find_key(state, "title") or _find_key(state, "name")
         # Older payloads list "photos"; newer ones list "mediaItems" whose
         # image URLs carry an encoded listing id (see _listing_image_markers).

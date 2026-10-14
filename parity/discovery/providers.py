@@ -71,11 +71,16 @@ class AirbnbMapProvider:
     def __init__(
         self,
         client: httpx.Client,
-        initial_radius_km: float = 1.0,
-        expanded_radius_km: float = 3.0,
-        minimum_candidates: int = 5,
+        # Airbnb returns ~18 results per page in its own relevance order, so
+        # a wide first box can omit a listing 70 m away in a dense area
+        # (seen live for 820056 in Marrakech).  Search tight first, widen only
+        # while too few listings come back.
+        initial_radius_km: float = 0.4,
+        expanded_radius_km: float = 1.5,
+        minimum_candidates: int = 12,
         max_pages_per_radius: int = 2,
         photo_hash_cache=None,
+        outer_radius_km: float | None = 4.0,
         prescreen_limit: int = 25,
         card_photos_per_listing: int = 4,
         subject_photo_limit: int = 12,
@@ -87,6 +92,7 @@ class AirbnbMapProvider:
         self.subject_photo_limit = subject_photo_limit
         self.initial_radius_km = initial_radius_km
         self.expanded_radius_km = expanded_radius_km
+        self.outer_radius_km = outer_radius_km
         self.minimum_candidates = minimum_candidates
         self.max_pages_per_radius = max_pages_per_radius
         self.search_origin = "https://www.airbnb.com"
@@ -125,16 +131,16 @@ class AirbnbMapProvider:
         refs, first_trace, first_failures = self._search(subject, self.initial_radius_km)
         traces = [first_trace]
         parse_failures = first_failures
-        if len({ref.raw_id for ref in refs}) < self.minimum_candidates:
-            expanded, expanded_trace, expanded_failures = self._search(
-                subject, self.expanded_radius_km
-            )
+        for radius in (self.expanded_radius_km, self.outer_radius_km):
+            if radius is None or len({ref.raw_id for ref in refs}) >= self.minimum_candidates:
+                break
+            expanded, expanded_trace, expanded_failures = self._search(subject, radius)
             refs.extend(expanded)
             traces.append(expanded_trace)
             parse_failures += expanded_failures
         deduped: dict[str, PropertyRef] = {}
         for ref in refs:
-            deduped[ref.raw_id] = ref
+            deduped.setdefault(ref.raw_id, ref)  # keep inner-ring order
         trace_text = "; ".join(
             f"{trace.radius_km:g}km: {trace.requests} request(s), "
             f"HTTP {','.join(map(str, trace.statuses)) or '--'}, "
