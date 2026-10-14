@@ -406,3 +406,32 @@ def test_card_photo_prescreen_lifts_the_true_listing_above_closer_lookalikes():
     assert lookalike.extra["card_photo_matches"] == 0
     assert "1 with matching card photos" in summary
     assert score_candidate(subject, true_listing)[0] > score_candidate(subject, lookalike)[0]
+
+
+def test_one_transient_network_failure_is_retried_for_gets(tmp_path, monkeypatch):
+    from parity import http_control
+    from parity.http_control import GovernedHttpClient, HttpFixtureStore, RequestGovernor
+    from parity.storage import EvidenceStore
+
+    monkeypatch.setattr(http_control, "TRANSIENT_RETRY_DELAY_SECONDS", 0)
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.ConnectTimeout("The handshake operation timed out", request=request)
+        return httpx.Response(200, json={"ok": True})
+
+    with EvidenceStore(tmp_path / "g.db") as store:
+        client = GovernedHttpClient(
+            httpx.Client(transport=httpx.MockTransport(handler)),
+            HttpFixtureStore(tmp_path / "fx"),
+            RequestGovernor(store, budgets={}),
+        )
+        assert client.get("https://www.travelstaytion.com/stay/1").status_code == 200
+        assert calls["n"] == 2
+
+        calls["n"] = 0
+        with pytest.raises(httpx.ConnectTimeout):
+            client.request("POST", "https://www.airbnb.com/api/v3/x")
+        assert calls["n"] == 1

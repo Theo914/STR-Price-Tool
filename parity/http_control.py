@@ -32,6 +32,14 @@ DEFAULT_FIXTURE_TTL_DAYS = 30
 DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS = 6 * 60 * 60
 DEFAULT_ACCESS_DENIED_COOLDOWN_SECONDS = 24 * 60 * 60
 
+TRANSIENT_RETRY_DELAY_SECONDS = 2.0
+_TRANSIENT_ERRORS = (
+    httpx.ConnectError,
+    httpx.ConnectTimeout,
+    httpx.ReadTimeout,
+    httpx.RemoteProtocolError,
+)
+
 DEFAULT_REQUEST_BUDGETS: dict[tuple[str, str], int] = {
     ("airbnb", "search"): 2,
     ("airbnb", "page"): 3,
@@ -527,7 +535,15 @@ class GovernedHttpClient:
         self.governor.before_network_request(classified)
         started = time.monotonic()
         try:
-            response = self._client.request(method, url, **kwargs)
+            try:
+                response = self._client.request(method, url, **kwargs)
+            except _TRANSIENT_ERRORS:
+                # One retry for idempotent GETs: a single dropped TLS handshake
+                # (seen live) otherwise discarded a whole discovery search.
+                if method.upper() != "GET":
+                    raise
+                time.sleep(TRANSIENT_RETRY_DELAY_SECONDS)
+                response = self._client.request(method, url, **kwargs)
         except Exception as error:
             self.governor.record_error(
                 classified,
