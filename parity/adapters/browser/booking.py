@@ -1154,12 +1154,12 @@ def _capture_booking_pricing_snapshot(
                         : '';
                     const pricedOption = Array.from(select.options).find(option =>
                         option.value && option.value !== '0'
-                        && /€\\s*[0-9]/.test(option.textContent || ''));
+                        && /(?:€|£|US\\$|A\\$|C\\$|NZ\\$|\\$|CHF|R\\$)\\s*[0-9]/.test(option.textContent || ''));
                     const pricedOptionText = pricedOption
                         ? (pricedOption.textContent || '').replace(/\\s+/g, ' ').trim()
                         : '';
                     const roundedMatch = pricedOptionText.match(
-                        /€\\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\\.[0-9]{2})?)/
+                        /(?:€|£|US\\$|A\\$|C\\$|NZ\\$|\\$|CHF|R\\$)\\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\\.[0-9]{2})?)/
                     );
                     const roundedTotal = roundedMatch
                         ? Number(roundedMatch[1].replace(/,/g, '')) : null;

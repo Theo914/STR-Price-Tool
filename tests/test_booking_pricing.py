@@ -1198,3 +1198,72 @@ def test_booking_dropping_the_requested_dates_is_reported_plainly():
         "https://www.booking.com/hotel/fr/x.html?checkin=2026-11-30&checkout=2026-12-03", "Price for 3 nights"
     )
     assert not booking_dates_were_dropped("https://www.booking.com/hotel/fr/x.html", "Price for 3 nights")
+
+
+class _GbpRatePage:
+    """Stand-in page reproducing the operator's 337856 GBP capture: the
+    embedded rates carried swapped cancellation terms, and the rate table
+    rows show '1 (£1,127)' non-refundable and '1 (£1,234)' free cancellation."""
+
+    def __init__(self):
+        self.url = (
+            "https://www.booking.com/hotel/fr/veeve-natural-heights-in-the-6th.en-gb.html"
+            "?checkin=2026-11-30&checkout=2026-12-03&group_adults=2"
+        )
+
+    def evaluate(self, script, *args):
+        return {
+            "legacy_keys": [],
+            "rates": [
+                {"total": "1127.13", "cancellation_type": ""},
+                {"total": "1233.57", "cancellation_type": "non_refundable"},
+            ],
+            "rate_displays": [
+                {"block_id": "512977502_362962169_4_0_0", "cancellation_type": "non_refundable",
+                 "text": "", "rounded_total": 1127},
+                {"block_id": "512977502_428303482_4_0_0", "cancellation_type": "free_cancellation",
+                 "text": "", "rounded_total": 1234},
+            ],
+        }
+
+    def locator(self, selector):
+        class _Empty:
+            def evaluate_all(self, *args, **kwargs):
+                return []
+
+            def count(self):
+                return 0
+
+            @property
+            def first(self):
+                return self
+
+            def nth(self, index):
+                return self
+
+        return _Empty()
+
+    def wait_for_timeout(self, ms):
+        pass
+
+
+def test_gbp_rate_rows_pair_each_price_with_its_own_terms():
+    from datetime import date
+
+    from parity.adapters.browser.booking import _capture_booking_pricing_snapshot
+    from parity.core.models import PropertyRef
+
+    ref = PropertyRef(
+        site="booking", raw_id="veeve-natural-heights-in-the-6th",
+        url="https://www.booking.com/hotel/fr/veeve-natural-heights-in-the-6th.html",
+    )
+    snapshot = _capture_booking_pricing_snapshot(
+        _GbpRatePage(), ref=ref, quote_url="https://www.booking.com/hotel/fr/x.html",
+        checkin=date(2026, 11, 30), checkout=date(2026, 12, 3), guests=2,
+        currency="GBP", body_text="Price for 3 nights", source_text=None,
+    )
+    assert snapshot["rate_options"] == [
+        {"total": 1127.13, "cancellation": "Non-refundable", "selected": False},
+        {"total": 1233.57, "cancellation": "Free cancellation", "selected": True},
+    ]
+    assert snapshot["diagnostics"]["structured_flexible_rate_count"] == 1
