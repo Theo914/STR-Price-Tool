@@ -1267,3 +1267,16 @@ def test_gbp_rate_rows_pair_each_price_with_its_own_terms():
         {"total": 1233.57, "cancellation": "Free cancellation", "selected": True},
     ]
     assert snapshot["diagnostics"]["structured_flexible_rate_count"] == 1
+
+
+@pytest.mark.parametrize("label", ["6 % Tourism fee", "Tourist levy", "Tourism Levy"])
+def test_percentage_tourism_fee_is_a_tax_not_an_unknown_line(ref, label):
+    # Live regression (707947, Florida): Booking itemised "6 % Tourism fee".
+    snapshot = _snapshot(ref)
+    snapshot["line_items"][3]["label"] = label
+
+    result = _parse(ref, snapshot)
+
+    assert result.outcome == Outcome.PRICED
+    assert result.breakdown.tourist_tax == 60.0
+    assert result.comparable_total == 2150.0

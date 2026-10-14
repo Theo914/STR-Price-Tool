@@ -332,6 +332,12 @@ def _booking_line_category(label: str) -> str | None:
         return "discount"
     if any(word in low for word in ("tourist tax", "city tax", "occupancy tax", "vat", "tax")):
         return "tax"
+    # Government tourism charges that Booking labels as a "fee" or "levy"
+    # (e.g. Miami-Dade's "6 % Tourism fee"): taxes, not host fees.
+    if any(word in low for word in (
+        "tourism fee", "tourist fee", "tourism levy", "tourist levy",
+    )):
+        return "tax"
     if "deposit" in low:
         return "deposit"
     if "clean" in low:
