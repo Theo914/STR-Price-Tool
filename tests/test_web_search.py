@@ -347,3 +347,56 @@ def test_browser_session_hands_challenge_to_operator_only_when_interactive(monke
     assert operator.wait_for_human(
         page, "Booking.com search", ready=lambda p: ready_calls.append(1) or len(ready_calls) >= 2
     ) is True
+
+
+class _StubPage:
+    def __init__(self, texts, frames=()):
+        self.texts = list(texts)
+        self.frames = [type("F", (), {"url": url})() for url in frames]
+        self.reloads = 0
+
+    def bring_to_front(self):
+        pass
+
+    def reload(self, **kwargs):
+        self.reloads += 1
+
+    def wait_for_timeout(self, ms):
+        pass
+
+    def title(self):
+        return ""
+
+    def inner_text(self, selector):
+        return self.texts.pop(0) if len(self.texts) > 1 else self.texts[0]
+
+
+def test_page_that_did_not_load_is_reloaded_without_asking_the_operator(capsys):
+    from parity.adapters.browser.browser_session import BrowserSession
+
+    session = BrowserSession(headless=False, offline=True, interactive=True)
+    page = _StubPage(["Booking.com footer only"])
+    assert session.wait_for_human(page, "Booking.com search", ready=lambda p: False) is False
+    assert page.reloads == session.AUTO_RELOADS
+    err = capsys.readouterr().err
+    assert "ACTION NEEDED" not in err
+    assert "showed no human check" in err
+
+    loads_on_retry = _StubPage(["blank"])
+    assert session.wait_for_human(
+        loads_on_retry, "Booking.com search", ready=lambda p: p.reloads >= 1
+    ) is True
+    assert "ACTION NEEDED" not in capsys.readouterr().err
+
+
+def test_visible_challenge_widget_asks_the_operator_and_names_the_window(capsys):
+    from parity.adapters.browser.browser_session import BrowserSession
+
+    session = BrowserSession(headless=False, offline=True, interactive=True)
+    session.HUMAN_CHECK_TIMEOUT_SECONDS = 0.05
+    page = _StubPage(["Please wait"], frames=["https://geo.captcha-delivery.com/captcha/?x=1"])
+    assert session.has_visible_challenge(page) is True
+    assert session.wait_for_human(page, "Booking.com", ready=lambda p: False) is False
+    err = capsys.readouterr().err
+    assert "ACTION NEEDED" in err and "separate window" in err
+    assert page.reloads == 0

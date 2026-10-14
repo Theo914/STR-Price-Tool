@@ -300,6 +300,9 @@ class WebLicenceSearchProvider:
         """Give the operator time to clear a challenge in the visible window."""
         if not self.interactive or getattr(self.session, "headless", True):
             return False
+        shared = getattr(self.session, "wait_for_human", None)
+        if shared is not None:
+            return bool(shared(page, engine.capitalize() + " search"))
         self.notify(
             f"[parity] {engine} is asking for a human check. Please solve it in the "
             f"browser window; waiting up to {int(self.challenge_wait_seconds)}s..."

@@ -343,7 +343,7 @@ class BookingSearchProvider:
             page,
             "Booking.com search",
             ready=lambda current: self._wait_for_results(current, 1000),
-            hint="Solve any check in the browser window; if the page is blank, press F5 to reload it.",
+            hint="Solve it there; the tool continues by itself.",
         ))
 
     def _wait_for_results(self, page, timeout_ms: int) -> bool:

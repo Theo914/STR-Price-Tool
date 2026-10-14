@@ -182,46 +182,102 @@ class BrowserSession:
     )
 
     HUMAN_CHECK_TIMEOUT_SECONDS = 180
+    AUTO_RELOADS = 2
+    # Frames/scripts of the common challenge providers; a challenge is only
+    # handed to the operator when one of these (or challenge wording) shows.
+    _CHALLENGE_FRAME_MARKERS = (
+        "recaptcha", "hcaptcha", "challenges.cloudflare.com", "turnstile",
+        "awswaf", "captcha-delivery", "geo.captcha", "px-captcha", "perimeterx",
+        "arkoselabs", "funcaptcha",
+    )
 
-    def wait_for_human(self, page: Page, label: str, ready=None, hint: str | None = None) -> bool:
-        """Let the operator clear a challenge in the visible window.
+    def has_visible_challenge(self, page: Page) -> bool:
+        try:
+            text = f"{page.title()}\n{page.inner_text('body')[:20000]}"
+        except Exception:
+            text = ""
+        if self.is_bot_challenge(text):
+            return True
+        try:
+            urls = [frame.url.lower() for frame in page.frames]
+        except Exception:
+            urls = []
+        return any(marker in url for url in urls for marker in self._CHALLENGE_FRAME_MARKERS)
 
-        Returns True once the page no longer looks like a challenge (and
-        ``ready(page)`` is true, when given).  Never interacts with the
-        challenge itself.  Non-interactive or headless sessions return False
-        immediately so callers keep their existing fail-closed behaviour.
-        """
-        if not self.interactive or self._headless:
-            return False
-        print(
-            f"[parity] ACTION NEEDED: {label} is asking for a human check. "
-            f"{hint or 'Please solve it in the browser window.'} "
-            f"Waiting up to {self.HUMAN_CHECK_TIMEOUT_SECONDS // 60} minutes...",
-            file=sys.stderr,
-            flush=True,
-        )
+    def _raise_window(self, page: Page) -> None:
+        """Best effort: un-minimise the tool's browser window and focus the tab."""
         try:
             page.bring_to_front()
         except Exception:
             pass
+        try:
+            cdp = page.context.new_cdp_session(page)
+            window = cdp.send("Browser.getWindowForTarget")
+            window_id = window.get("windowId")
+            if window_id is not None:
+                cdp.send("Browser.setWindowBounds", {"windowId": window_id, "bounds": {"windowState": "minimized"}})
+                cdp.send("Browser.setWindowBounds", {"windowId": window_id, "bounds": {"windowState": "normal"}})
+        except Exception:
+            pass
+
+    def _ready(self, page: Page, ready) -> bool:
+        try:
+            if self.is_bot_challenge(f"{page.title()}\n{page.inner_text('body')[:20000]}"):
+                return False
+            return True if ready is None else bool(ready(page))
+        except Exception:
+            return False
+
+    def wait_for_human(self, page: Page, label: str, ready=None, hint: str | None = None) -> bool:
+        """Recover a page that did not load, or let the operator clear a check.
+
+        A page that simply failed to load is reloaded automatically; the
+        operator is only asked when a real challenge (wording or a known
+        challenge widget) is visible.  Never interacts with the challenge
+        itself.  Non-interactive or headless sessions return False at once
+        so callers keep their fail-closed behaviour.
+        """
+        if not self.interactive or self._headless:
+            return False
+        if not self.has_visible_challenge(page):
+            for attempt in range(1, self.AUTO_RELOADS + 1):
+                print(
+                    f"[parity] {label} did not load properly; reloading automatically "
+                    f"({attempt}/{self.AUTO_RELOADS})...",
+                    file=sys.stderr, flush=True,
+                )
+                try:
+                    page.reload(wait_until="domcontentloaded", timeout=25000)
+                except Exception:
+                    pass
+                page.wait_for_timeout(6000)
+                if self._ready(page, ready):
+                    print(f"[parity] {label} loaded; continuing.", file=sys.stderr, flush=True)
+                    return True
+                if self.has_visible_challenge(page):
+                    break
+            else:
+                print(
+                    f"[parity] {label} still did not load and showed no human check; "
+                    "skipping it for this listing.",
+                    file=sys.stderr, flush=True,
+                )
+                return False
+        print(
+            f"[parity] ACTION NEEDED: {label} is showing a 'not a robot' check in the "
+            "tool's own browser window (a separate window, check your taskbar). "
+            f"{hint or 'Solve it there.'} "
+            f"Waiting up to {self.HUMAN_CHECK_TIMEOUT_SECONDS // 60} minutes...",
+            file=sys.stderr,
+            flush=True,
+        )
+        self._raise_window(page)
         deadline = time.monotonic() + self.HUMAN_CHECK_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
             page.wait_for_timeout(2000)
-            try:
-                text = f"{page.title()}\n{page.inner_text('body')[:20000]}"
-            except Exception:
-                continue  # navigating after the check was solved
-            if self.is_bot_challenge(text):
-                continue
-            if ready is None:
+            if self._ready(page, ready):
                 print(f"[parity] {label} check cleared; continuing.", file=sys.stderr, flush=True)
                 return True
-            try:
-                if ready(page):
-                    print(f"[parity] {label} check cleared; continuing.", file=sys.stderr, flush=True)
-                    return True
-            except Exception:
-                continue
         print(f"[parity] {label} check was not cleared in time; skipping.", file=sys.stderr, flush=True)
         return False
 
