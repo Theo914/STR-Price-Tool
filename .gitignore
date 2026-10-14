@@ -7,3 +7,4 @@ venv/
 .playwright-mcp/
 .browser-profile/
 .parity/
+.browser-profiles/
