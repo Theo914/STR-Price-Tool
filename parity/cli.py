@@ -23,7 +23,7 @@ import subprocess
 import sys
 import webbrowser
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 import re
 from urllib.parse import urlparse
@@ -70,6 +70,7 @@ from parity.discovery.providers import (
 )
 from parity.core.date_policy import (
     candidate_date_windows,
+    prefer_open_checkins,
     operating_today,
     select_common_minimum_stay_window,
     select_first_available_window,
@@ -401,6 +402,36 @@ def _portfolio_candidate_ref(job: dict, requested_currency: str) -> tuple[Proper
     return subject, candidate
 
 
+def _calendar_preferred_windows(subject_adapter, subject, windows, today, min_lead_days):
+    """Use the subject's open calendar dates when it publishes them."""
+    reader = getattr(subject_adapter, "open_checkin_dates", None)
+    if reader is None:
+        return windows
+    try:
+        open_dates = reader(subject)
+    except (OfflineFixtureError, RequestDeferred):
+        raise
+    except Exception as error:
+        print(f"[parity] calendar unavailable ({error}); using weekly windows", file=sys.stderr)
+        return windows
+    preferred = prefer_open_checkins(
+        windows, open_dates, earliest=today + timedelta(days=min_lead_days)
+    )
+    if preferred is not windows:
+        print(
+            "[parity] using open TravelStaytion check-in dates from its calendar: "
+            + ", ".join(window.checkin.isoformat() for window in preferred),
+            file=sys.stderr,
+        )
+    elif open_dates is not None:
+        print(
+            f"[parity] calendar has no open check-in from {min_lead_days} days out; "
+            "using weekly windows",
+            file=sys.stderr,
+        )
+    return windows if preferred is windows else preferred
+
+
 def _select_portfolio_shared_minimum(
     listing: dict,
     listing_jobs: list[dict],
@@ -451,6 +482,9 @@ def _select_portfolio_shared_minimum(
 
     with _http_client(shared_args) as client:
         subject_adapter = get_http_adapter(subject.site, client=client)
+        windows = _calendar_preferred_windows(
+            subject_adapter, subject, windows, today, args.min_lead_days
+        )
 
         def subject_probe(window):
             restriction_reader = getattr(subject_adapter, "minimum_stay_for_checkin", None)
@@ -1084,9 +1118,9 @@ def _cmd_auto(args: argparse.Namespace) -> int:
                         providers.append(HistoricalEvidenceProvider(historical))
                     # Each channel's own map/search first: it needs no search
                     # engine and works for listings nobody has checked before.
-                    if "airbnb" not in known_sites:
+                    if "airbnb" in args.channels and "airbnb" not in known_sites:
                         providers.append(AirbnbMapProvider(client))
-                    if "booking" not in known_sites:
+                    if "booking" in args.channels and "booking" not in known_sites:
                         if subject.lat is not None and subject.lng is not None:
                             providers.append(BookingMapProvider(browser_session))
                         providers.append(BookingSearchProvider(browser_session))
@@ -1101,11 +1135,12 @@ def _cmd_auto(args: argparse.Namespace) -> int:
                         match.ref.site for match in matches if match.is_verified()
                     }
                     # Web search is the last resort, only for unmatched channels.
-                    missing = {"airbnb", "booking"} - verified_sites
+                    excluded = {"airbnb", "booking"} - set(args.channels)
+                    missing = set(args.channels) - verified_sites
                     if missing:
                         web_providers: list = []
                         _run_web_licence_search(
-                            args, subject, browser_session, verified_sites, web_providers
+                            args, subject, browser_session, verified_sites | excluded, web_providers
                         )
                         if web_providers:
                             checked = {canonicalize_url(match.ref.url) for match in matches}
@@ -1145,7 +1180,7 @@ def _cmd_auto(args: argparse.Namespace) -> int:
                     placeholders = []
                     name = subject.title or f"TravelStaytion {raw_id}"
                     local_listing_id = f"auto-{raw_id}"
-                    for channel in ("airbnb", "booking"):
+                    for channel in args.channels:
                         channel_candidates = ranked[channel]
                         review_candidates = [
                             {
@@ -1535,6 +1570,9 @@ def _cmd_quote(args: argparse.Namespace) -> int:
                 search_weeks=args.auto_date_search_weeks,
             )
             subject_adapter = get_http_adapter(subject.site, client=client)
+            windows = _calendar_preferred_windows(
+                subject_adapter, subject, windows, today, args.min_lead_days
+            )
 
             def subject_probe(window):
                 restriction_reader = getattr(
@@ -1692,6 +1730,9 @@ def _cmd_quote(args: argparse.Namespace) -> int:
                     search_weeks=args.auto_date_search_weeks,
                 )
                 subject_adapter = get_http_adapter(subject.site, client=client)
+                windows = _calendar_preferred_windows(
+                    subject_adapter, subject, windows, today, args.min_lead_days
+                )
 
                 def probe(window):
                     result = subject_adapter.get_price(
@@ -2059,6 +2100,13 @@ def main(argv: list[str] | None = None) -> int:
     p_auto.add_argument("--dashboard-output", default="parity-dashboard.html")
     p_auto.add_argument("--force", action="store_true")
     p_auto.add_argument("--headless", action="store_true", default=False)
+    p_auto.add_argument(
+        "--channels",
+        nargs="+",
+        choices=["airbnb", "booking"],
+        default=["airbnb", "booking"],
+        help="OTA channels to discover, verify and price (default: both)",
+    )
     p_auto.add_argument(
         "--interactive-captcha",
         action="store_true",

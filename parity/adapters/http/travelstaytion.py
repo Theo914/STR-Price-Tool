@@ -141,6 +141,27 @@ class TravelStaytionAdapter(HttpOnly):
             raise ValueError("TravelStaytion calendar payload was not an object")
         return calendar
 
+    def _calendar_for(self, ref: PropertyRef) -> dict:
+        calendar = self._calendar_cache.get(ref.raw_id)
+        if calendar is None:
+            response = self._client.get(ref.url)
+            response.raise_for_status()
+            calendar = self._extract_calendar(response.text)
+            self._calendar_cache[ref.raw_id] = calendar
+        return calendar
+
+    def open_checkin_dates(self, ref: PropertyRef) -> list[date]:
+        """Dates the public calendar marks as bookable check-ins."""
+        days: list[date] = []
+        for item in self._calendar_for(ref).get("checkins") or []:
+            if not isinstance(item, dict) or item.get("canCheckin") is not True:
+                continue
+            try:
+                days.append(date.fromisoformat(str(item.get("date"))))
+            except ValueError:
+                continue
+        return days
+
     def minimum_stay_for_checkin(self, ref: PropertyRef, checkin: date) -> int | None:
         """Read the exact date-level restriction from the public calendar.
 
@@ -149,12 +170,7 @@ class TravelStaytionAdapter(HttpOnly):
         ``None`` means the calendar did not provide trustworthy restriction
         evidence for that date; callers must not reinterpret it as one night.
         """
-        calendar = self._calendar_cache.get(ref.raw_id)
-        if calendar is None:
-            response = self._client.get(ref.url)
-            response.raise_for_status()
-            calendar = self._extract_calendar(response.text)
-            self._calendar_cache[ref.raw_id] = calendar
+        calendar = self._calendar_for(ref)
 
         default = calendar.get("defaultMinStay")
         for item in calendar.get("checkins") or []:
@@ -248,7 +264,38 @@ class TravelStaytionAdapter(HttpOnly):
                 )
             return _err(Outcome.UNAVAILABLE, reason or "unavailable", str(resp.url))
 
+        # The quote echoes the stay it actually priced; a silent change of
+        # dates or guests would make the comparison meaningless.
+        stay = data.get("stay")
+        if isinstance(stay, dict):
+            echoed = (stay.get("checkin"), stay.get("checkout"), stay.get("guests"))
+            expected = (checkin.isoformat(), checkout.isoformat(), guests)
+            if any(value is not None for value in echoed) and (
+                str(echoed[0]) != expected[0]
+                or str(echoed[1]) != expected[1]
+                or str(echoed[2]) != str(expected[2])
+            ):
+                return _err(
+                    Outcome.INCOMPLETE_EVIDENCE,
+                    f"TravelStaytion quoted a different stay {echoed} than requested {expected}",
+                    str(resp.url),
+                )
+
         price = data.get("price") or {}
+        if not isinstance(price, dict):
+            return _err(Outcome.ERROR, "quote price block was not an object", str(resp.url))
+        numeric_keys = (
+            "totalNoDiscountDecimal", "totalDecimal", "cleaningDecimal", "cleaning",
+            "discountDecimal", "discount", "securityDepositDecimal", "securityDeposit",
+        )
+        for key in numeric_keys:
+            value = price.get(key)
+            if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
+                return _err(
+                    Outcome.ERROR,
+                    f"quote price.{key} was not numeric ({type(value).__name__})",
+                    str(resp.url),
+                )
         total_no_discount = price.get("totalNoDiscountDecimal")
         if total_no_discount is None:
             return _err(Outcome.ERROR, "quote had no price.totalNoDiscountDecimal", str(resp.url))
@@ -292,7 +339,13 @@ class TravelStaytionAdapter(HttpOnly):
             tourist_tax=tourist_tax,
             deposit=deposit,
         )
-        currency = str(data.get("currency") or requested_currency).upper()
+        if not data.get("currency"):
+            return _err(
+                Outcome.INCOMPLETE_EVIDENCE,
+                "TravelStaytion quote did not state its currency",
+                str(resp.url),
+            )
+        currency = str(data["currency"]).upper()
         if currency != requested_currency:
             return _err(
                 Outcome.INCOMPLETE_EVIDENCE,

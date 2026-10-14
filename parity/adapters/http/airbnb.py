@@ -87,6 +87,19 @@ def _structural_from_meta(html: str) -> dict:
     return out
 
 
+def _listing_image_markers(raw_id: str) -> tuple[str, ...]:
+    """Path markers identifying this listing's own photos.
+
+    Older photos use ``Hosting-<id>/``; newer ones use the base64 of
+    ``StaySupplyListing:<id>`` (or ``StayListing:<id>``) instead.
+    """
+    encoded = tuple(
+        "Hosting-" + base64.b64encode(f"{prefix}:{raw_id}".encode()).decode() + "/"
+        for prefix in ("StaySupplyListing", "StayListing")
+    )
+    return (f"Hosting-{raw_id}/", *encoded)
+
+
 def _identity_text(html: str) -> str:
     """Listing text including embedded JSON strings (descriptions, the
     "Registration Details" section), with escapes and markup removed."""
@@ -592,13 +605,19 @@ class AirbnbAdapter(HttpOnly):
         lat = _find_key(state, "lat")
         lng = _find_key(state, "lng")
         title = _find_key(state, "title") or _find_key(state, "name")
-        photos = _find_key(state, "photos") or []
+        # Older payloads list "photos"; newer ones list "mediaItems" whose
+        # image URLs carry an encoded listing id (see _listing_image_markers).
+        photos = _find_key(state, "photos") or _find_key(state, "mediaItems") or []
         gallery = []
         for p in photos if isinstance(photos, list) else []:
             if isinstance(p, dict):
                 pic = p.get("picture") or p.get("baseUrl") or p.get("url")
-                if pic:
+                if isinstance(pic, str) and pic and pic not in gallery:
                     gallery.append(pic)
+        markers = _listing_image_markers(raw_id)
+        own = [pic for pic in gallery if any(marker in pic for marker in markers)]
+        if own:
+            gallery = own
 
         page_text = _identity_text(resp.text)
         registration_ids = list(find_licence_numbers(page_text))
@@ -614,7 +633,9 @@ class AirbnbAdapter(HttpOnly):
             capacity=structural.get("capacity"),
             lat=lat,
             lng=lng,
-            title=title if isinstance(title, str) else structural.get("title"),
+            # The share metadata names this listing; a generic "title" key in
+            # the state can be a date label ("Nov 1 – 4") or a section heading.
+            title=structural.get("title") or (title if isinstance(title, str) else None),
             gallery=gallery,
             extra={"registration_tokens": sorted(registration_tokens(page_text))},
         )
@@ -643,11 +664,11 @@ class AirbnbAdapter(HttpOnly):
         )
         image_urls: list[str] = []
         seen_images: set[str] = set()
-        listing_marker = f"Hosting-{raw_id}/"
+        listing_markers = _listing_image_markers(raw_id)
         for match in _MUSCACHE_IMAGE_RE.finditer(normalised_html):
             image_url = match.group(0).rstrip("\\),]}")
             image_key = image_url.split("?", 1)[0]
-            if listing_marker not in image_key or image_key in seen_images:
+            if not any(marker in image_key for marker in listing_markers) or image_key in seen_images:
                 continue
             seen_images.add(image_key)
             image_urls.append(f"{image_key}?im_w=720")

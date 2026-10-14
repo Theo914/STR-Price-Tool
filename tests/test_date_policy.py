@@ -396,3 +396,45 @@ def test_common_minimum_stay_does_not_reclassify_generic_unavailability():
 
     assert selection.selected_index == 2
     assert candidate_calls == [selection.window]
+
+
+def test_open_calendar_dates_replace_blind_weekly_guesses():
+    from parity.core.date_policy import DateWindow, prefer_open_checkins
+
+    today = date(2026, 10, 14)
+    windows = candidate_date_windows(today=today, target_lead_days=120, stay_nights=1, search_weeks=4)
+    # Seasonal villa: only bookable until 31 December (rates not loaded later).
+    open_dates = [date(2026, 10, 18) + timedelta(days=i) for i in range(75)]
+    preferred = prefer_open_checkins(windows, open_dates, earliest=today + timedelta(days=30))
+
+    assert len(preferred) == len(windows)
+    assert all(window.checkin in open_dates for window in preferred)
+    assert all(window.checkin >= today + timedelta(days=30) for window in preferred)
+    assert all(window.nights == 1 for window in preferred)
+    gaps = sorted(window.checkin for window in preferred)
+    assert all((later - earlier).days >= 7 for earlier, later in zip(gaps, gaps[1:]))
+    # Nearest to the 120-day target first.
+    assert preferred[0].checkin == date(2026, 12, 31)
+    assert isinstance(preferred[0], DateWindow)
+
+
+def test_open_dates_inside_generated_windows_are_kept_first():
+    from parity.core.date_policy import prefer_open_checkins
+
+    today = date(2026, 10, 14)
+    windows = candidate_date_windows(today=today, target_lead_days=120, stay_nights=2, search_weeks=3)
+    open_dates = [windows[1].checkin, date(2027, 6, 1)]
+    preferred = prefer_open_checkins(windows, open_dates, earliest=today)
+    assert preferred[0].checkin == windows[1].checkin
+    assert preferred[0].nights == 2
+
+
+def test_no_usable_calendar_keeps_weekly_windows():
+    from parity.core.date_policy import prefer_open_checkins
+
+    today = date(2026, 10, 14)
+    windows = candidate_date_windows(today=today, target_lead_days=120, stay_nights=1, search_weeks=3)
+    assert prefer_open_checkins(windows, None, earliest=today) is windows
+    assert prefer_open_checkins(windows, [], earliest=today) is windows
+    too_soon = [today + timedelta(days=5)]
+    assert prefer_open_checkins(windows, too_soon, earliest=today + timedelta(days=30)) is windows

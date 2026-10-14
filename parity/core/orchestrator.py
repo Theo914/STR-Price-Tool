@@ -52,6 +52,7 @@ from parity.adapters.http.travelstaytion import _ID_RE as TS_ID_RE
 from parity.adapters.registry import resolve
 from parity.core.matching import (
     common_registration_ids,
+    conflicting_registration_ids,
     find_licence_numbers,
     KEYPOINT_MIN_INLIERS,
     keypoint_matching_available,
@@ -196,7 +197,16 @@ def identify_and_match(
     verified_sites: set[str] = set()
     manual_verifications = manual_verifications or {}
 
+    soft_conflict_notes: dict[str, str] = {}
+
     def record(match: MatchResult) -> None:
+        note = soft_conflict_notes.get(match.ref.url)
+        if note:
+            match.evidence.append(IdentityEvidence(
+                kind=IdentityEvidenceKind.STRUCTURAL_CONFLICT,
+                detail=f"{note}; bathroom counts vary between channels, so this was not blocking",
+                source_url=match.ref.url,
+            ))
         matches.append(match)
         if match.decision == IdentityDecision.VERIFIED:
             verified_sites.add(match.ref.site)
@@ -322,8 +332,17 @@ def identify_and_match(
             candidate_ids,
             cand_ref.extra.get("registration_tokens") or (),
         )
-        conflicts = structural_conflicts(subject, cand_ref)
+        all_conflicts = structural_conflicts(subject, cand_ref)
+        # Bathroom counts are published inconsistently (half baths, separate
+        # WCs, en-suites), so a bathroom-only difference does not stop the
+        # licence/photo checks; bedrooms and capacity remain blocking.
+        conflicts = [item for item in all_conflicts if not item.startswith("bathrooms")]
+        soft = [item for item in all_conflicts if item.startswith("bathrooms")]
+        if soft and not conflicts:
+            soft_conflict_notes[cand_ref.url] = "; ".join(soft)
+            _log(f"  {'; '.join(soft)} -- not blocking; continuing identity checks")
         if conflicts:
+            conflicts = all_conflicts
             conflict_detail = "; ".join(conflicts)
             decision = (
                 IdentityDecision.PROBABLE_REVIEW_REQUIRED
@@ -371,6 +390,12 @@ def identify_and_match(
                 ))
                 continue
 
+        registration_conflicts = conflicting_registration_ids(subject_ids, candidate_ids)
+        if registration_conflicts:
+            _log(
+                "  candidate publishes a different registration of the same scheme "
+                f"({sorted(registration_conflicts)[0]}); photos can only mark it for review"
+            )
         _log("  no licence match -- falling back to photo hashing")
         if subject_hashes is None:
             _log(f"  hashing subject's {min(len(subject.gallery), GALLERY_HASH_LIMIT)} photos (one-time)")
@@ -399,7 +424,24 @@ def identify_and_match(
                 subject_images, _fetch_gallery_images(client, cand_ref.gallery)
             )
             _log(f"  keypoint matching: {keypoint_summary.matching_pairs} one-to-one photo pair(s)")
-        if keypoint_summary is not None and keypoint_summary.same_property:
+        if registration_conflicts and (
+            photo_summary.same_property
+            or (keypoint_summary is not None and keypoint_summary.same_property)
+        ):
+            record(MatchResult(
+                ref=cand_ref,
+                decision=IdentityDecision.PROBABLE_REVIEW_REQUIRED,
+                evidence=[IdentityEvidence(
+                    kind=IdentityEvidenceKind.INSUFFICIENT_PHOTO_MATCH,
+                    detail=(
+                        "photos match, but the candidate publishes a different registration "
+                        f"({sorted(registration_conflicts)[0]}) from the same scheme -- possibly "
+                        "a sibling unit sharing building photos; manual review required"
+                    ),
+                    source_url=url,
+                )],
+            ))
+        elif keypoint_summary is not None and keypoint_summary.same_property:
             record(MatchResult(
                 ref=cand_ref,
                 decision=IdentityDecision.VERIFIED,

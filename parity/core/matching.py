@@ -74,17 +74,49 @@ def registration_tokens(text: str, limit: int = 500000) -> set[str]:
     return tokens
 
 
+# A bare page token only proves identity when it is specific enough not to
+# collide with prices, ids or dates; shorter all-digit ids must appear in
+# licence/registration context (candidate_ids, from find_licence_numbers).
+MIN_DIGITS_FOR_CONTEXT_FREE_NUMERIC_ID = 10
+
+
 def common_registration_ids(subject_ids, candidate_ids, candidate_tokens=()) -> set[str]:
     """Subject ids also published by the candidate, compared normalised."""
-    candidate_keys = {normalise_registration(item) for item in candidate_ids if item}
-    candidate_keys |= set(candidate_tokens or ())
-    return {
-        item
-        for item in subject_ids
-        if item
-        and is_distinctive_registration(item)
-        and normalise_registration(item) in candidate_keys
+    labelled = {normalise_registration(item) for item in candidate_ids if item}
+    tokens = set(candidate_tokens or ())
+    common: set[str] = set()
+    for item in subject_ids:
+        if not item or not is_distinctive_registration(item):
+            continue
+        key = normalise_registration(item)
+        if key in labelled:
+            common.add(item)
+        elif key in tokens and (
+            not key.isdigit() or len(key) >= MIN_DIGITS_FOR_CONTEXT_FREE_NUMERIC_ID
+        ):
+            common.add(item)
+    return common
+
+
+def conflicting_registration_ids(subject_ids, candidate_ids) -> set[str]:
+    """Candidate ids from the same scheme as the subject's but different.
+
+    Sibling units in one building share common-area photos but carry their
+    own registrations (e.g. STRA6056KHBVDM4I vs STRA60568EX3H1MX).  "Same
+    scheme" means the same normalised length and first three characters,
+    which keeps unrelated numbers (timestamps, prices) from counting.
+    """
+    subject_keys = {
+        normalise_registration(item) for item in subject_ids if is_distinctive_registration(item)
     }
+    conflicts: set[str] = set()
+    for item in candidate_ids:
+        key = normalise_registration(item)
+        if not is_distinctive_registration(key) or key in subject_keys:
+            continue
+        if any(len(key) == len(own) and key[:3] == own[:3] for own in subject_keys):
+            conflicts.add(item)
+    return conflicts
 
 
 # ---- Photo matching (DCT pHash) ------------------------------------------
@@ -290,6 +322,9 @@ def is_same_property(our_hashes: list[PHash], their_hashes: list[PHash]) -> tupl
 
 KEYPOINT_MIN_INLIERS = 60
 KEYPOINT_MAX_SIDE = 800
+# Keypoints also match shared common areas (pool, facade) across sibling
+# units, so the fallback asks for one more independent photo than pHash.
+KEYPOINT_MIN_MATCHING_PHOTOS = 3
 
 
 def keypoint_matching_available() -> bool:
@@ -362,7 +397,7 @@ def match_photo_keypoints(subject_images: list[bytes], candidate_images: list[by
         used_candidate.add(j)
         pairs += 1
     return PhotoMatchSummary(
-        same_property=pairs >= MIN_MATCHING_PHOTOS,
+        same_property=pairs >= KEYPOINT_MIN_MATCHING_PHOTOS,
         matching_pairs=pairs,
         subject_unique=len(subject),
         candidate_unique=len(candidate),

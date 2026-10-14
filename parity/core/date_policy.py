@@ -159,6 +159,38 @@ def candidate_date_windows(
     ]
 
 
+def prefer_open_checkins(
+    windows: list[DateWindow],
+    open_checkins: list[date] | None,
+    *,
+    earliest: date,
+) -> list[DateWindow]:
+    """Replace blind weekly guesses with check-ins the calendar says are open.
+
+    Keeps the same number of windows and stay length.  Generated windows that
+    are already open come first; the rest are filled with open dates nearest
+    the original target, at least a week apart so one blocked week cannot
+    consume the whole budget.  Without usable calendar evidence the original
+    windows are returned unchanged.
+    """
+    if not windows or not open_checkins:
+        return windows
+    eligible = sorted({day for day in open_checkins if day >= earliest})
+    if not eligible:
+        return windows
+    nights = windows[0].nights
+    target = windows[0].checkin
+    chosen: list[date] = [w.checkin for w in windows if w.checkin in set(eligible)]
+    for day in sorted(eligible, key=lambda value: (abs((value - target).days), value)):
+        if len(chosen) >= len(windows):
+            break
+        if all(abs((day - existing).days) >= 7 for existing in chosen):
+            chosen.append(day)
+    if not chosen:
+        return windows
+    return [DateWindow(checkin=day, checkout=day + timedelta(days=nights)) for day in chosen]
+
+
 def select_first_available_window(
     windows: list[DateWindow],
     probe: Callable[[DateWindow], PriceResult],
