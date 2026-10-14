@@ -438,3 +438,41 @@ def test_no_usable_calendar_keeps_weekly_windows():
     assert prefer_open_checkins(windows, [], earliest=today) is windows
     too_soon = [today + timedelta(days=5)]
     assert prefer_open_checkins(windows, too_soon, earliest=today + timedelta(days=30)) is windows
+
+
+def test_one_ota_failing_does_not_void_the_other_comparisons():
+    """Operator run 337856: Booking returned an unrecognised page and the
+    whole check (TravelStaytion and Airbnb too) failed."""
+    from parity.core.date_policy import DateWindow, select_multi_channel_minimum_stay_window
+
+    def result(site, window, outcome):
+        return PriceResult(
+            site=site,
+            ref=PropertyRef(site=site, raw_id="1", url="u"),
+            outcome=outcome,
+            checkin=window.checkin,
+            checkout=window.checkout,
+            guests=2,
+            comparable_total=100.0 if outcome == Outcome.PRICED else None,
+            notes="Booking checkout snapshot has no supported availability outcome"
+            if outcome == Outcome.ERROR else None,
+        )
+
+    windows = [DateWindow(date(2026, 11, 30), date(2026, 12, 1))]
+    selection = select_multi_channel_minimum_stay_window(
+        windows,
+        lambda w: result("travelstaytion", w, Outcome.PRICED),
+        [
+            ("booking", lambda w: result("booking", w, Outcome.ERROR)),
+            ("airbnb", lambda w: result("airbnb", w, Outcome.PRICED)),
+        ],
+    )
+    assert set(selection.candidate_prices) == {"airbnb"}
+    assert "no supported availability outcome" in selection.dropped["booking"]
+
+    with pytest.raises(ValueError, match="every OTA failed"):
+        select_multi_channel_minimum_stay_window(
+            windows,
+            lambda w: result("travelstaytion", w, Outcome.PRICED),
+            [("booking", lambda w: result("booking", w, Outcome.ERROR))],
+        )

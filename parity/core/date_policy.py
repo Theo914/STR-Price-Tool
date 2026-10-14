@@ -1,7 +1,7 @@
 """Deterministic guardrails and candidate windows for live price dates."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Callable, Sequence
 
@@ -77,6 +77,9 @@ class MultiChannelMinimumStaySelection:
     probes: tuple[MinimumStayProbe, ...]
     subject_price: PriceResult
     candidate_prices: dict[str, PriceResult]
+    # Channels that failed with an uncertain error and were excluded so the
+    # remaining channels could still be compared: {label: reason}.
+    dropped: dict[str, str] = field(default_factory=dict)
 
 
 def operating_today(name: str = "system-local", *, now: datetime | None = None) -> date:
@@ -298,6 +301,8 @@ def select_multi_channel_minimum_stay_window(
         raise ValueError("max_adjustments must be greater than zero")
 
     probes: list[MinimumStayProbe] = []
+    active = list(candidate_probes)
+    dropped: dict[str, str] = {}
 
     def record(index: int, result: PriceResult) -> None:
         probes.append(MinimumStayProbe(
@@ -360,7 +365,7 @@ def select_multi_channel_minimum_stay_window(
             candidate_prices: dict[str, PriceResult] = {}
             restart = False
             unavailable = False
-            for label, candidate_probe in candidate_probes:
+            for label, candidate_probe in list(active):
                 candidate = candidate_probe(window)
                 record(index, candidate)
                 if candidate.outcome == Outcome.UNAVAILABLE:
@@ -377,12 +382,22 @@ def select_multi_channel_minimum_stay_window(
                     restart = True
                     break
                 if candidate.outcome != Outcome.PRICED:
+                    # One channel's uncertain failure must not void the others:
+                    # drop it with its reason and re-check this window without it.
                     detail = f": {candidate.notes}" if candidate.notes else ""
-                    raise ValueError(
-                        "minimum-stay selection stopped on candidate window "
-                        f"{index}/{len(windows)} at {candidate.site} with "
-                        f"{candidate.outcome.value}{detail}"
+                    dropped[label] = (
+                        f"{candidate.site} stopped on window {index}/{len(windows)} "
+                        f"with {candidate.outcome.value}{detail}"
                     )
+                    active.remove((label, candidate_probe))
+                    candidate_minimums.pop(label, None)
+                    if not active:
+                        raise ValueError(
+                            "minimum-stay selection stopped: every OTA failed; "
+                            + " | ".join(dropped.values())
+                        )
+                    restart = True
+                    break
                 if nights == 1:
                     candidate_minimums[label] = 1
                 if (
@@ -407,9 +422,11 @@ def select_multi_channel_minimum_stay_window(
                 probes=tuple(probes),
                 subject_price=subject,
                 candidate_prices=candidate_prices,
+                dropped=dict(dropped),
             )
 
+    dropped_text = ("; dropped: " + " | ".join(dropped.values())) if dropped else ""
     raise ValueError(
         "minimum-stay selection found no common priceable stay in "
-        f"{len(windows)} bounded weekly window(s)"
+        f"{len(windows)} bounded weekly window(s){dropped_text}"
     )

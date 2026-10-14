@@ -1185,3 +1185,16 @@ def test_dashboard_price_view_carries_other_rates():
     assert view["rate_options"] == [
         {"total": 1334.0, "cancellation": "Non-refundable", "selected": False}
     ]
+
+
+def test_booking_dropping_the_requested_dates_is_reported_plainly():
+    from parity.adapters.browser.booking import booking_dates_were_dropped
+
+    undated = "Availability We Price Match Select dates to see this property's availability and prices"
+    assert booking_dates_were_dropped(
+        "https://www.booking.com/hotel/fr/veeve-natural-heights-in-the-6th.en-gb.html", undated
+    )
+    assert not booking_dates_were_dropped(
+        "https://www.booking.com/hotel/fr/x.html?checkin=2026-11-30&checkout=2026-12-03", "Price for 3 nights"
+    )
+    assert not booking_dates_were_dropped("https://www.booking.com/hotel/fr/x.html", "Price for 3 nights")

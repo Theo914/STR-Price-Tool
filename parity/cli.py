@@ -602,6 +602,8 @@ def _select_portfolio_shared_minimum(
     }
     for candidate in candidates.values():
         candidate.extra["date_policy"] = date_policy
+    for label, reason in selection.dropped.items():
+        print(f"[parity] {label} left out of the shared stay: {reason}", file=sys.stderr)
     print(
         "[parity] shared stay selected for TravelStaytion, Airbnb and Booking: "
         f"{selection.window.checkin.isoformat()} to "
@@ -775,6 +777,11 @@ def _cmd_portfolio(args: argparse.Namespace) -> int:
             result_job = job
             if shared is not None:
                 selection = shared["selection"]
+                if job["channel"] in selection.dropped:
+                    raise ValueError(
+                        f"{job['channel']} could not be priced, so it was left out "
+                        f"while the other sites were compared: {selection.dropped[job['channel']]}"
+                    )
                 candidate = shared["candidates"][job["channel"]]
                 price = selection.candidate_prices[job["channel"]]
                 candidate_minimum = selection.candidate_minimum_stay_nights[

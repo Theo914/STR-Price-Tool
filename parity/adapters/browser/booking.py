@@ -54,6 +54,29 @@ _RECONCILIATION_TOLERANCE = 0.02
 _MAX_BOOKING_SOURCE_BYTES = 12 * 1024 * 1024
 
 
+_BOOKING_RATES_READY_JS = """() => {
+    if (document.querySelector('#hprt-table, .hprt-table, [data-component="hotel/new-rooms-table/HprtTable"]')) return true;
+    const text = (document.body && document.body.innerText) || '';
+    return /not available for your dates|no availability for your dates|sold out on our site|no longer available|minimum (length of )?stay/i.test(text);
+}"""
+
+
+def booking_dates_were_dropped(final_url: str, body_text: str) -> bool:
+    """True when Booking served the undated property page instead of rates."""
+    query = urlsplit(final_url or "").query
+    asks_for_dates = "select dates to see this property" in " ".join(body_text.casefold().split())
+    return asks_for_dates and "checkin" not in query
+
+
+def _wait_for_booking_rates(page, timeout_ms: int) -> bool:
+    """Wait for the room/rate table or an explicit availability message."""
+    try:
+        page.wait_for_function(_BOOKING_RATES_READY_JS, timeout=timeout_ms)
+        return True
+    except Exception:
+        return False
+
+
 def _human_cleared(session, page) -> bool:
     """Hand a Booking challenge to the operator when the session allows it."""
     wait = getattr(session, "wait_for_human", None)
@@ -1866,7 +1889,16 @@ class BookingAdapter(NeedsBrowser):
                 except Exception:
                     source_text = None
             BrowserSession.decline_cookies(page)
-            page.wait_for_timeout(1800)
+            if response is not None and response.status == 202:
+                # Booking's interstitial: its HTML is a holding page that later
+                # reloads into the real listing, so it is not pricing evidence.
+                source_text = None
+            if not _wait_for_booking_rates(page, 15000):
+                wait = getattr(self._session, "wait_for_human", None)
+                if wait:
+                    wait(page, "Booking.com price page",
+                         ready=lambda current: _wait_for_booking_rates(current, 1000))
+            page.wait_for_timeout(800)
             title = page.title()
             body_text = page.inner_text("body")
             if BrowserSession.is_bot_challenge(f"{title}\n{body_text}") and _human_cleared(
@@ -1905,6 +1937,25 @@ class BookingAdapter(NeedsBrowser):
                     source_url=quote_url,
                 )
 
+            if booking_dates_were_dropped(page.url, body_text):
+                self._session.record_navigation(
+                    self.site,
+                    "pricing",
+                    (time.monotonic() - started) * 1000,
+                    outcome="browser_dates_dropped",
+                )
+                recorded = True
+                return _booking_price_error(
+                    ref,
+                    checkin,
+                    checkout,
+                    guests,
+                    currency,
+                    "Booking ignored the requested dates (it redirected to the plain "
+                    "property page asking to 'select dates'), so no rate could be read; "
+                    "Booking does this when it is limiting automated visits - try again later",
+                    source_url=quote_url,
+                )
             snapshot = _capture_booking_pricing_snapshot(
                 page,
                 ref=ref,
