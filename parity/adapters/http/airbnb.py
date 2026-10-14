@@ -22,6 +22,7 @@ import base64
 import hashlib
 import html as html_lib
 import json
+import os
 import re
 from datetime import date
 from urllib.parse import urlparse
@@ -85,6 +86,12 @@ def _structural_from_meta(html: str) -> dict:
     if title:
         out["title"] = title
     return out
+
+
+_BEFORE_TAXES_RE = re.compile(
+    r"before taxes|excluding taxes|excl\.? taxes|hors taxes|sin impuestos|ohne steuern",
+    re.IGNORECASE,
+)
 
 
 def _listing_image_markers(raw_id: str) -> tuple[str, ...]:
@@ -554,8 +561,18 @@ def _stays_pdp_request(
         "X-Airbnb-API-Key": _AIRBNB_PUBLIC_API_KEY,
         "X-Airbnb-GraphQL-Platform": "web",
         "X-Airbnb-GraphQL-Platform-Client": "minimalist-niobe",
+        # Without a point-of-sale country Airbnb may quote a "total before
+        # taxes" (seen from a US network: GBP 1,044.44 vs the guest's GBP
+        # 1,087.28 incl. taxes for 34141360).  With a country it returns the
+        # tax-inclusive guest total and an explicit Taxes line.
+        "X-Airbnb-Country": airbnb_point_of_sale_country(),
     }
     return url, params, payload, headers
+
+
+def airbnb_point_of_sale_country() -> str:
+    value = os.environ.get("PARITY_AIRBNB_COUNTRY", "GB").strip().upper()
+    return value if re.fullmatch(r"[A-Z]{2}", value) else "GB"
 
 
 class AirbnbAdapter(HttpOnly):
@@ -874,6 +891,13 @@ class AirbnbAdapter(HttpOnly):
             return _err(
                 Outcome.ERROR,
                 "checkout price rejected: structuredDisplayPrice is missing",
+                str(resp.url),
+            )
+        if _BEFORE_TAXES_RE.search(json.dumps(structured_price, ensure_ascii=False)):
+            return _err(
+                Outcome.INCOMPLETE_EVIDENCE,
+                "checkout price rejected: Airbnb showed a total before taxes, so it is "
+                "not the guest total (set PARITY_AIRBNB_COUNTRY to the guest's country)",
                 str(resp.url),
             )
         observed_currency = _observed_currency(structured_price)

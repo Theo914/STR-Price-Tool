@@ -104,3 +104,37 @@ def test_booking_unresolved_search_index_page_is_not_a_candidate():
         ]
     })
     assert [ref.url for ref in refs] == ["https://www.booking.com/hotel/au/villa-woody.en-gb.html"]
+
+
+def _price_capture(name, currency="GBP"):
+    captured = json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+    seen = {}
+
+    def handler(request):
+        seen["country"] = request.headers.get("x-airbnb-country")
+        return httpx.Response(200, json=captured)
+
+    adapter = AirbnbAdapter(client=httpx.Client(transport=httpx.MockTransport(handler)))
+    ref = PropertyRef(
+        site="airbnb", raw_id="34141360", url="https://www.airbnb.com/rooms/34141360",
+        extra={"quote_currency": currency},
+    )
+    return adapter.get_price(ref, date(2026, 11, 30), date(2026, 12, 3), 2), seen
+
+
+def test_airbnb_guest_total_includes_taxes_like_the_guest_sees():
+    """Operator screenshot, 30 Nov-3 Dec 2026: GBP 1,087.28 = 3 x 428.50
+    (1,285.49) - early booking discount 241.05 + taxes 42.84."""
+    result, seen = _price_capture("airbnb_stays_pdp_sections_34141360_gbp_with_taxes.json")
+    assert seen["country"] == "GB"
+    assert result.outcome == Outcome.PRICED, result.notes
+    assert result.headline_total == 1087.28
+    assert [(item.category, item.amount) for item in result.line_items] == [
+        ("accommodation", 1285.49), ("discount", -241.05), ("tax", 42.84),
+    ]
+
+
+def test_airbnb_total_before_taxes_is_never_compared():
+    result, _ = _price_capture("airbnb_stays_pdp_sections_34141360_gbp_before_taxes.json")
+    assert result.outcome == Outcome.INCOMPLETE_EVIDENCE
+    assert "before taxes" in result.notes
