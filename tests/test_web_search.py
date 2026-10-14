@@ -284,3 +284,18 @@ def test_engine_without_ota_links_falls_through_to_next_engine():
     assert "https://www.airbnb.com/rooms/4242" in [ref.url for ref in result.refs]
     first_two = [(o.engine, o.status) for o in provider.outcomes[:2]]
     assert first_two == [("bing", "no_ota_links"), ("duckduckgo", "hits")]
+
+
+def test_duckduckgo_duck_challenge_is_recognised_as_a_block():
+    subject = _subject(registration_ids=["ET-0123-E"], title=None)
+    session = _FakeSession({
+        ("duckduckgo", '"ET-0123-E" site:airbnb.com'): {
+            "hrefs": ["https://html.duckduckgo.com/html/"],
+            "text": "Unfortunately, bots use DuckDuckGo too. Please complete the following "
+                    "challenge to confirm this search was made by a human.",
+        },
+    })
+    provider = WebLicenceSearchProvider(session, engines=("duckduckgo", "google"))
+    provider.discover(subject)
+    assert (provider.outcomes[0].engine, provider.outcomes[0].status) == ("duckduckgo", "challenge")
+    assert all(o.engine != "duckduckgo" for o in provider.outcomes[1:])

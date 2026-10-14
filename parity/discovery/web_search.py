@@ -48,6 +48,9 @@ _CHALLENGE_MARKERS = (
     "are you a robot",
     "our systems have detected",
     "one last step",
+    "bots use duckduckgo too",
+    "confirm this search was made by a human",
+    "select all squares",
 )
 _NO_RESULTS_MARKERS = (
     "no results found",
@@ -404,7 +407,9 @@ class WebLicenceSearchProvider:
                     )
                     continue
 
-                if looks_like_challenge(page.text) and not page.hrefs:
+                if looks_like_challenge(page.text) and not any(
+                    classify_result_url(href) for href in page.hrefs
+                ):
                     blocked.add(engine)
                     self.outcomes.append(QueryOutcome(engine, query.text, "challenge"))
                     continue
