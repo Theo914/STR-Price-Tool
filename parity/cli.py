@@ -144,6 +144,7 @@ def _maybe_browser_session(
     fixtures_dir: str = ".parity/fixtures",
     fixture_ttl_days: int = 30,
     governor=None,
+    interactive: bool = False,
 ):
     """Only launches a browser if one of the URLs actually needs it (Vrbo/
     Expedia, Booking.com, Guesty) -- most checks are pure HTTP and
@@ -167,6 +168,7 @@ def _maybe_browser_session(
         governor=governor,
         offline=offline,
         record_fixtures=record_fixtures,
+        interactive=interactive,
     ) as session:
         yield session
 
@@ -873,6 +875,7 @@ def _cmd_discover(args: argparse.Namespace) -> int:
                     fixtures_dir=args.fixtures_dir,
                     fixture_ttl_days=args.fixture_ttl_days,
                     governor=client.governor,
+                    interactive=args.interactive_captcha and not args.headless,
                 ) as browser_session:
                     if not args.no_web_search:
                         providers.insert(1, WebLicenceSearchProvider(
@@ -1051,6 +1054,7 @@ def _cmd_auto(args: argparse.Namespace) -> int:
                 fixtures_dir=str(fixtures_dir),
                 fixture_ttl_days=args.fixture_ttl_days,
                 governor=client.governor,
+                interactive=args.interactive_captcha and not args.headless,
             ) as browser_session:
                 for position, (raw_id, subject_url) in enumerate(requested, start=1):
                     print(
@@ -2058,8 +2062,9 @@ def main(argv: list[str] | None = None) -> int:
     p_auto.add_argument(
         "--interactive-captcha",
         action="store_true",
-        help="Wait (up to 90s) for the operator to clear a search-engine check "
-        "in the visible browser instead of skipping that engine",
+        help="Wait (up to 3 minutes) for the operator to clear a Booking.com or "
+        "search-engine human check in the visible browser instead of skipping it "
+        "(the app turns this on)",
     )
     p_auto.add_argument(
         "--no-web-search",
@@ -2145,8 +2150,9 @@ def main(argv: list[str] | None = None) -> int:
     p_discover.add_argument(
         "--interactive-captcha",
         action="store_true",
-        help="Wait (up to 90s) for the operator to clear a search-engine check "
-        "in the visible browser instead of skipping that engine",
+        help="Wait (up to 3 minutes) for the operator to clear a Booking.com or "
+        "search-engine human check in the visible browser instead of skipping it "
+        "(the app turns this on)",
     )
     p_discover.add_argument(
         "--no-web-search",

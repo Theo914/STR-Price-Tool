@@ -65,6 +65,8 @@ def test_auto_command_is_argument_list_without_shell_or_arbitrary_paths(tmp_path
     assert command[:4] == [sys.executable, "-m", "parity.cli", "auto"]
     assert command[4] == "1069699"
     assert "GBP" in command
+    # The app has an operator at the visible browser to clear human checks.
+    assert "--interactive-captcha" in command
 
 
 def test_launcher_keeps_javascript_regex_and_newline_escapes_intact():

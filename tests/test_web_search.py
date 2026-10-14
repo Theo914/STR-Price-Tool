@@ -311,3 +311,39 @@ def test_already_matched_channel_is_not_searched_again():
     assert not any("site:airbnb.com" in query for query in searched)
     # The unrestricted licence search still runs for the missing channel.
     assert '"ET-0123-E"' in searched
+
+
+def test_browser_session_hands_challenge_to_operator_only_when_interactive(monkeypatch):
+    from parity.adapters.browser.browser_session import BrowserSession
+
+    class Page:
+        def __init__(self, texts):
+            self.texts = list(texts)
+
+        def bring_to_front(self):
+            pass
+
+        def wait_for_timeout(self, ms):
+            pass
+
+        def title(self):
+            return ""
+
+        def inner_text(self, selector):
+            return self.texts.pop(0) if len(self.texts) > 1 else self.texts[0]
+
+    quiet = BrowserSession(headless=False, offline=True, interactive=False)
+    assert quiet.wait_for_human(Page(["Are you a robot?"]), "Booking.com") is False
+
+    headless = BrowserSession(headless=True, offline=True, interactive=True)
+    assert headless.wait_for_human(Page(["Are you a robot?"]), "Booking.com") is False
+
+    operator = BrowserSession(headless=False, offline=True, interactive=True)
+    page = Page(["Are you a robot?", "Are you a robot?", "Villa results"])
+    assert operator.wait_for_human(page, "Booking.com") is True
+
+    ready_calls = []
+    page = Page(["Search results page"])
+    assert operator.wait_for_human(
+        page, "Booking.com search", ready=lambda p: ready_calls.append(1) or len(ready_calls) >= 2
+    ) is True

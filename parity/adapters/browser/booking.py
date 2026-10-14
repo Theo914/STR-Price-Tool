@@ -54,6 +54,12 @@ _RECONCILIATION_TOLERANCE = 0.02
 _MAX_BOOKING_SOURCE_BYTES = 12 * 1024 * 1024
 
 
+def _human_cleared(session, page) -> bool:
+    """Hand a Booking challenge to the operator when the session allows it."""
+    wait = getattr(session, "wait_for_human", None)
+    return bool(wait and wait(page, "Booking.com"))
+
+
 def canonical_booking_url(url: str) -> str:
     """Remove tracking/session parameters and require a Booking hotel path."""
     parts = urlsplit(url)
@@ -1683,6 +1689,11 @@ class BookingAdapter(NeedsBrowser):
             page.wait_for_timeout(1200)
             title = page.title()
             body_text = page.inner_text("body")
+            if BrowserSession.is_bot_challenge(f"{title}\n{body_text}") and _human_cleared(
+                self._session, page
+            ):
+                title = page.title()
+                body_text = page.inner_text("body")
             if BrowserSession.is_bot_challenge(f"{title}\n{body_text}"):
                 self._session.record_navigation(
                     self.site,
@@ -1802,6 +1813,11 @@ class BookingAdapter(NeedsBrowser):
             page.wait_for_timeout(1800)
             title = page.title()
             body_text = page.inner_text("body")
+            if BrowserSession.is_bot_challenge(f"{title}\n{body_text}") and _human_cleared(
+                self._session, page
+            ):
+                title = page.title()
+                body_text = page.inner_text("body")
             if BrowserSession.is_bot_challenge(f"{title}\n{body_text}"):
                 self._session.record_navigation(
                     self.site,

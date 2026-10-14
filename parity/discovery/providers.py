@@ -260,6 +260,16 @@ class BookingSearchProvider:
         || /\\b0 properties\\b|no properties found/i.test(
             (document.body && document.body.innerText) || '')"""
 
+    def _human_ready(self, page) -> bool:
+        """Operator clears a check or reloads until results appear."""
+        wait = getattr(self.session, "wait_for_human", None)
+        return bool(wait and wait(
+            page,
+            "Booking.com search",
+            ready=lambda current: self._wait_for_results(current, 1000),
+            hint="Solve any check in the browser window; if the page is blank, press F5 to reload it.",
+        ))
+
     def _wait_for_results(self, page, timeout_ms: int) -> bool:
         try:
             page.wait_for_function(self._RESULTS_READY_JS, timeout=timeout_ms)
@@ -284,7 +294,7 @@ class BookingSearchProvider:
             if not self._wait_for_results(page, 15000):
                 # An interstitial that did not hand over: one reload only.
                 page.reload(wait_until="domcontentloaded", timeout=25000)
-                if not self._wait_for_results(page, 20000):
+                if not self._wait_for_results(page, 20000) and not self._human_ready(page):
                     raise ValueError(
                         "Booking.com search page showed no result cards or empty-"
                         "results message (interstitial or layout change)"
@@ -292,6 +302,9 @@ class BookingSearchProvider:
             page.wait_for_timeout(800)
             title = page.title()
             body_text = page.inner_text("body")
+            if BrowserSession.is_bot_challenge(f"{title}\n{body_text}") and self._human_ready(page):
+                title = page.title()
+                body_text = page.inner_text("body")
             if BrowserSession.is_bot_challenge(f"{title}\n{body_text}"):
                 self.session.record_navigation(
                     "booking",

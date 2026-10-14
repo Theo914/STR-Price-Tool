@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import os
 import platform
+import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -59,6 +61,7 @@ class BrowserSession:
         governor: RequestGovernor | None = None,
         offline: bool = False,
         record_fixtures: bool = False,
+        interactive: bool = False,
     ):
         if offline and record_fixtures:
             raise ValueError("--offline and --record-fixtures cannot be used together")
@@ -68,6 +71,9 @@ class BrowserSession:
         self.governor = governor
         self.offline = offline
         self.record_fixtures = record_fixtures
+        # When True and the window is visible, a challenge page is handed to
+        # the operator (wait_for_human) instead of failing immediately.
+        self.interactive = interactive
         self._playwright: Optional[Playwright] = None
         self._context: Optional[BrowserContext] = None
         self.browser_channel: str | None = None
@@ -172,7 +178,52 @@ class BrowserSession:
     _BOT_CHALLENGE_MARKERS = (
         "bot or not", "verify you're human", "verify you are human",
         "unusual traffic", "access denied", "press & hold",
+        "not a robot", "are you a robot",
     )
+
+    HUMAN_CHECK_TIMEOUT_SECONDS = 180
+
+    def wait_for_human(self, page: Page, label: str, ready=None, hint: str | None = None) -> bool:
+        """Let the operator clear a challenge in the visible window.
+
+        Returns True once the page no longer looks like a challenge (and
+        ``ready(page)`` is true, when given).  Never interacts with the
+        challenge itself.  Non-interactive or headless sessions return False
+        immediately so callers keep their existing fail-closed behaviour.
+        """
+        if not self.interactive or self._headless:
+            return False
+        print(
+            f"[parity] ACTION NEEDED: {label} is asking for a human check. "
+            f"{hint or 'Please solve it in the browser window.'} "
+            f"Waiting up to {self.HUMAN_CHECK_TIMEOUT_SECONDS // 60} minutes...",
+            file=sys.stderr,
+            flush=True,
+        )
+        try:
+            page.bring_to_front()
+        except Exception:
+            pass
+        deadline = time.monotonic() + self.HUMAN_CHECK_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
+            page.wait_for_timeout(2000)
+            try:
+                text = f"{page.title()}\n{page.inner_text('body')[:20000]}"
+            except Exception:
+                continue  # navigating after the check was solved
+            if self.is_bot_challenge(text):
+                continue
+            if ready is None:
+                print(f"[parity] {label} check cleared; continuing.", file=sys.stderr, flush=True)
+                return True
+            try:
+                if ready(page):
+                    print(f"[parity] {label} check cleared; continuing.", file=sys.stderr, flush=True)
+                    return True
+            except Exception:
+                continue
+        print(f"[parity] {label} check was not cleared in time; skipping.", file=sys.stderr, flush=True)
+        return False
 
     @staticmethod
     def is_bot_challenge(text: str) -> bool:

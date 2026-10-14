@@ -253,7 +253,7 @@ class WebLicenceSearchProvider:
         engines: tuple[str, ...] = WEB_SEARCH_ENGINES,
         max_queries: int = 8,
         stop_when_both_found: bool = True,
-        challenge_wait_seconds: float = 90.0,
+        challenge_wait_seconds: float = 180.0,
         interactive: bool = True,
         pause_seconds: float = 2.5,
         sleep: Callable[[float], None] = time.sleep,
