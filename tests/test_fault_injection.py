@@ -331,3 +331,78 @@ def test_bathroom_only_difference_lets_photos_decide(monkeypatch):
     )
     assert matches[0].decision == IdentityDecision.VERIFIED
     assert any("bathrooms conflict" in item.detail for item in matches[0].evidence)
+
+
+def test_map_search_box_covers_the_radius_east_west_at_high_latitude():
+    from urllib.parse import parse_qs, urlsplit
+
+    from parity.core.neighbours import _iter_search_results
+
+    seen = []
+
+    def handler(request):
+        seen.append(parse_qs(urlsplit(str(request.url)).query))
+        return httpx.Response(200, text="<html></html>", headers={"content-type": "text/html"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    with pytest.raises(RuntimeError):  # the stub page has no results; only the request matters
+        list(_iter_search_results(client, 51.5, -0.2, 2, max_pages=1, max_distance_km=3.0))
+    params = seen[0]
+    lat_span_km = (float(params["ne_lat"][0]) - float(params["sw_lat"][0])) * 111.0
+    lng_span_km = (float(params["ne_lng"][0]) - float(params["sw_lng"][0])) * 111.0 * 0.6225
+    assert abs(lat_span_km - 6.0) < 0.1
+    assert abs(lng_span_km - 6.0) < 0.2
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("Total €1.234", 1234.0), ("€ 12.500", 12500.0), ("€3.640,00", 3640.0),
+     ("$1,200.50", 1200.5), ("€12.50", 12.5), ("549 €", 549.0)],
+)
+def test_money_text_handles_eu_thousands_grouping(text, expected):
+    from parity.core.textparse import parse_money
+
+    assert parse_money(text) == expected
+
+
+def _noise_jpeg(seed: int) -> bytes:
+    import io
+
+    import numpy as np
+    from PIL import Image
+
+    rng = np.random.default_rng(seed)
+    pixels = (rng.random((48, 64)) * 255).astype("uint8")
+    image = Image.fromarray(pixels).resize((640, 480), Image.NEAREST)
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", quality=90)
+    return buffer.getvalue()
+
+
+def test_card_photo_prescreen_lifts_the_true_listing_above_closer_lookalikes():
+    from parity.discovery.engine import score_candidate
+    from parity.discovery.providers import AirbnbMapProvider
+
+    images = {f"https://img.example/{seed}.jpg": _noise_jpeg(seed) for seed in range(1, 7)}
+    client = httpx.Client(transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, content=images[str(request.url)])
+    ))
+    subject = PropertyRef(
+        site="travelstaytion", raw_id="1", url="https://www.travelstaytion.com/stay/1",
+        lat=31.6, lng=-8.0, gallery=[f"https://img.example/{seed}.jpg" for seed in (1, 2, 3)],
+    )
+    true_listing = PropertyRef(
+        site="airbnb", raw_id="far", url="https://www.airbnb.com/rooms/far", lat=31.62, lng=-8.0,
+        extra={"card_photos": ["https://img.example/2.jpg", "https://img.example/3.jpg"]},
+    )
+    lookalike = PropertyRef(
+        site="airbnb", raw_id="near", url="https://www.airbnb.com/rooms/near", lat=31.6001, lng=-8.0,
+        extra={"card_photos": ["https://img.example/5.jpg", "https://img.example/6.jpg"]},
+    )
+    provider = AirbnbMapProvider(client)
+    summary = provider._photo_prescreen(subject, [true_listing, lookalike])
+
+    assert true_listing.extra["card_photo_matches"] == 2
+    assert lookalike.extra["card_photo_matches"] == 0
+    assert "1 with matching card photos" in summary
+    assert score_candidate(subject, true_listing)[0] > score_candidate(subject, lookalike)[0]

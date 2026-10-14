@@ -20,6 +20,7 @@ data-deferred-state-0 search-page payload before trusting this on a new run.
 from __future__ import annotations
 
 import base64
+import math
 import re
 from dataclasses import dataclass, field
 from statistics import median
@@ -136,14 +137,17 @@ def _iter_search_results(
     trace = trace or AirbnbSearchTrace(radius_km=max_distance_km)
     trace.search_origin = search_origin.rstrip("/")
     cursor = None
-    delta = max_distance_km / 111.0  # rough km -> degrees at mid-latitudes
+    delta = max_distance_km / 111.0  # km -> degrees of latitude
+    # A degree of longitude shrinks with latitude; without this a 3 km box at
+    # London (52N) only reached ~1.85 km east-west.
+    lng_delta = delta / max(math.cos(math.radians(lat)), 0.1)
     params_base = {
         "min_bedrooms": bedrooms,
         "room_types[]": "Entire home/apt",
         "ne_lat": lat + delta,
-        "ne_lng": lng + delta,
+        "ne_lng": lng + lng_delta,
         "sw_lat": lat - delta,
-        "sw_lng": lng - delta,
+        "sw_lng": lng - lng_delta,
         "search_by_map": "true",
     }
     if amenity_ids:
@@ -281,8 +285,23 @@ def _parse_result(raw: dict, require_price: bool = True) -> NeighbourComp | None
         return None
 
     title = listing.get("title") or listing.get("name")
+    if not isinstance(title, str) or not title.strip():
+        localized = raw.get("nameLocalized")
+        if isinstance(localized, dict):
+            title = localized.get("localizedStringWithTranslationPreference") or localized.get(
+                "localizedString"
+            )
+        elif isinstance(localized, str):
+            title = localized
     capacity = listing.get("personCapacity") or listing.get("guestCapacity")
     extra = {"graphql_id": graphql_id} if graphql_id else {}
+    card_photos = []
+    for picture in raw.get("contextualPictures") or []:
+        url = picture.get("picture") if isinstance(picture, dict) else None
+        if isinstance(url, str) and url.startswith("https://") and url not in card_photos:
+            card_photos.append(url.split("?", 1)[0] + "?im_w=480")
+    if card_photos:
+        extra["card_photos"] = card_photos
     ref = PropertyRef(
         site="airbnb",
         raw_id=str(room_id),

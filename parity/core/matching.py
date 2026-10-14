@@ -189,6 +189,31 @@ def structural_conflicts(subject, candidate) -> list[str]:
     return conflicts
 
 
+def split_structural_conflicts(subject, candidate) -> tuple[list[str], list[str]]:
+    """(blocking, non-blocking) conflicts.
+
+    Channels publish bathrooms inconsistently (half baths, separate WCs) and
+    capacity often differs by a sofa bed, so any bathroom difference and a
+    capacity difference of exactly two are recorded but do not stop the
+    licence/photo checks.  Bedrooms and larger capacity gaps stay blocking.
+    """
+    blocking: list[str] = []
+    soft: list[str] = []
+    for item in structural_conflicts(subject, candidate):
+        if item.startswith("bathrooms"):
+            soft.append(item)
+        elif (
+            item.startswith("capacity")
+            and subject.capacity is not None
+            and candidate.capacity is not None
+            and abs(subject.capacity - candidate.capacity) == 2
+        ):
+            soft.append(item)
+        else:
+            blocking.append(item)
+    return blocking, soft
+
+
 def _hash_region(im, size: int = 32) -> int:
     """One 64-bit DCT hash: 32x32 DCT-II, top-left 8x8 coefficients,
     thresholded against the median of the 63 AC coefficients (DC term

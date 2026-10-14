@@ -59,6 +59,7 @@ from parity.core.matching import (
     match_photo_hashes,
     match_photo_keypoints,
     phash_image,
+    split_structural_conflicts,
     structural_conflicts,
 )
 from parity.core.models import (
@@ -204,7 +205,7 @@ def identify_and_match(
         if note:
             match.evidence.append(IdentityEvidence(
                 kind=IdentityEvidenceKind.STRUCTURAL_CONFLICT,
-                detail=f"{note}; bathroom counts vary between channels, so this was not blocking",
+                detail=f"{note}; channels count bathrooms/sofa beds differently, so this was not blocking",
                 source_url=match.ref.url,
             ))
         matches.append(match)
@@ -332,17 +333,12 @@ def identify_and_match(
             candidate_ids,
             cand_ref.extra.get("registration_tokens") or (),
         )
-        all_conflicts = structural_conflicts(subject, cand_ref)
-        # Bathroom counts are published inconsistently (half baths, separate
-        # WCs, en-suites), so a bathroom-only difference does not stop the
-        # licence/photo checks; bedrooms and capacity remain blocking.
-        conflicts = [item for item in all_conflicts if not item.startswith("bathrooms")]
-        soft = [item for item in all_conflicts if item.startswith("bathrooms")]
+        conflicts, soft = split_structural_conflicts(subject, cand_ref)
         if soft and not conflicts:
             soft_conflict_notes[cand_ref.url] = "; ".join(soft)
             _log(f"  {'; '.join(soft)} -- not blocking; continuing identity checks")
         if conflicts:
-            conflicts = all_conflicts
+            conflicts = conflicts + soft
             conflict_detail = "; ".join(conflicts)
             decision = (
                 IdentityDecision.PROBABLE_REVIEW_REQUIRED

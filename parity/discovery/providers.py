@@ -8,6 +8,7 @@ import httpx
 
 from parity.adapters.browser.booking import canonical_booking_url
 from parity.adapters.browser.browser_session import BrowserSession
+from parity.core.matching import match_photo_hashes, phash_image
 from parity.core.models import PropertyRef, ProviderDiscoveryResult
 from parity.core.neighbours import AirbnbSearchTrace, _iter_search_results, _parse_result
 from parity.http_control import RequestDeferred
@@ -74,8 +75,16 @@ class AirbnbMapProvider:
         expanded_radius_km: float = 3.0,
         minimum_candidates: int = 5,
         max_pages_per_radius: int = 2,
+        photo_hash_cache=None,
+        prescreen_limit: int = 25,
+        card_photos_per_listing: int = 4,
+        subject_photo_limit: int = 12,
     ):
         self.client = client
+        self.photo_hash_cache = photo_hash_cache
+        self.prescreen_limit = prescreen_limit
+        self.card_photos_per_listing = card_photos_per_listing
+        self.subject_photo_limit = subject_photo_limit
         self.initial_radius_km = initial_radius_km
         self.expanded_radius_km = expanded_radius_km
         self.minimum_candidates = minimum_candidates
@@ -138,7 +147,67 @@ class AirbnbMapProvider:
             f"completed; {trace_text}; {parse_failures} unparseable result(s); "
             f"{len(deduped)} unique candidate(s)"
         )
+        prescreen = self._photo_prescreen(subject, list(deduped.values()))
+        if prescreen:
+            diagnostic += f"; {prescreen}"
         return ProviderDiscoveryResult(refs=list(deduped.values()), diagnostic=diagnostic)
+
+    def _hashes(self, urls: list[str], limit: int) -> list:
+        hashes = []
+        for url in urls[:limit]:
+            cached = None
+            if self.photo_hash_cache is not None:
+                try:
+                    cached = self.photo_hash_cache.load_photo_hash(url)
+                except Exception:
+                    cached = None
+            if cached is not None:
+                hashes.append(cached)
+                continue
+            try:
+                response = self.client.get(url, timeout=15.0)
+                response.raise_for_status()
+                image_hash = phash_image(response.content)
+            except RequestDeferred:
+                raise
+            except Exception:
+                continue
+            hashes.append(image_hash)
+            if self.photo_hash_cache is not None:
+                try:
+                    self.photo_hash_cache.save_photo_hash(url, image_hash)
+                except Exception:
+                    pass
+        return hashes
+
+    def _photo_prescreen(self, subject: PropertyRef, refs: list[PropertyRef]) -> str:
+        """Rank map candidates by how many search-card photos match the subject.
+
+        Cards carry several listing photos, so a cheap pHash comparison lets
+        the true listing outrank closer look-alikes before any listing page
+        is opened.  This is ranking evidence only; identity is still proven
+        later on the full listing page.
+        """
+        if self.prescreen_limit <= 0 or not subject.gallery:
+            return ""
+        candidates = [ref for ref in refs if ref.extra.get("card_photos")][: self.prescreen_limit]
+        if not candidates:
+            return "photo pre-screen skipped (no card photos)"
+        try:
+            subject_hashes = self._hashes(subject.gallery, self.subject_photo_limit)
+            if not subject_hashes:
+                return "photo pre-screen skipped (subject photos unavailable)"
+            hits = 0
+            for ref in candidates:
+                card_hashes = self._hashes(ref.extra["card_photos"], self.card_photos_per_listing)
+                if not card_hashes:
+                    continue
+                pairs = match_photo_hashes(subject_hashes, card_hashes).matching_pairs
+                ref.extra["card_photo_matches"] = pairs
+                hits += 1 if pairs else 0
+        except RequestDeferred as error:
+            return f"photo pre-screen stopped early ({error})"
+        return f"photo pre-screen: {len(candidates)} listing(s), {hits} with matching card photos"
 
 
 class BookingSearchProvider:

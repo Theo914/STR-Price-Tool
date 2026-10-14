@@ -33,6 +33,9 @@ def parse_money(text: str) -> float | None:
         # 3-digit group after the comma as thousands, matching EU sites.
         parts = raw.split(",")
         raw = raw.replace(",", "") if len(parts[-1]) == 3 else raw.replace(",", ".")
+    elif raw.count(".") >= 1 and all(len(part) == 3 for part in raw.split(".")[1:]):
+        # "1.234" / "12.500" / "1.234.567": EU thousands grouping, not decimals.
+        raw = raw.replace(".", "")
     try:
         return float(raw)
     except ValueError:

@@ -1119,7 +1119,7 @@ def _cmd_auto(args: argparse.Namespace) -> int:
                     # Each channel's own map/search first: it needs no search
                     # engine and works for listings nobody has checked before.
                     if "airbnb" in args.channels and "airbnb" not in known_sites:
-                        providers.append(AirbnbMapProvider(client))
+                        providers.append(AirbnbMapProvider(client, photo_hash_cache=hash_store))
                     if "booking" in args.channels and "booking" not in known_sites:
                         if subject.lat is not None and subject.lng is not None:
                             providers.append(BookingMapProvider(browser_session))

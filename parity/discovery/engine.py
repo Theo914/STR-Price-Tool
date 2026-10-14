@@ -56,6 +56,12 @@ def score_candidate(subject: PropertyRef, candidate: PropertyRef) -> tuple[float
         score += 5
         reasons.append("found by title web search (+5)")
 
+    card_matches = candidate.extra.get("card_photo_matches")
+    if isinstance(card_matches, int) and card_matches > 0:
+        points = min(card_matches, 3) * 40
+        score += points
+        reasons.append(f"{card_matches} search-card photo(s) match the subject (+{points})")
+
     map_rank = candidate.extra.get("booking_map_rank")
     if isinstance(map_rank, int) and 1 <= map_rank <= 10:
         points = 11 - map_rank
