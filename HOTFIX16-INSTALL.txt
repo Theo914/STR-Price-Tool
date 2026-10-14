@@ -1,0 +1,40 @@
+PHASE 7 HOTFIX 16 — VRBO/EXPEDIA IDENTITY FOUNDATION
+====================================================
+
+This package is installed over the clean project folder created after Phase 6.
+It does not make any live request during installation or testing.
+
+What this update does
+---------------------
+
+- Adds checksummed, structured Vrbo and Expedia identity snapshots.
+- Removes tracking parameters before snapshots are keyed or saved.
+- Allows exact registration, structural and photo evidence through the normal
+  identity verifier.
+- Adds one-page live navigation budgets for Vrbo and Expedia.
+- Keeps Expedia separate from Vrbo.
+- Locks both pricing paths until itemised checkout evidence is implemented.
+- Adds regression tests for canonical URLs, privacy boundaries, offline replay,
+  exact-registration verification, image request classification and the pricing
+  lock.
+
+Install in PowerShell
+---------------------
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-phase7-hotfix16.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result
+---------------
+
+126 passed
+
+STOP after the test run and send the complete result for review. Do not run a
+live Vrbo or Expedia command yet. The first live identity checkpoint will be
+provided only after the Windows suite passes.

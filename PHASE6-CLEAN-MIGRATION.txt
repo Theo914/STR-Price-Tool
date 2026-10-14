@@ -1,0 +1,48 @@
+TravelStaytion parity tool — clean folder migration after Phase 6
+
+Why this is a rebuild
+---------------------
+The old folder name contains “phase4”, but its .venv may contain absolute paths.
+Do not rename or move that folder. Create a clean correctly named folder and
+rebuild the virtual environment. The old working folder remains as the rollback.
+
+Step 1 — create the clean project folder (PowerShell)
+-----------------------------------------------------
+$oldProject = "$env:USERPROFILE\Downloads\parity-tool-phase4-verify-v5"
+$newProject = "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+New-Item -ItemType Directory -Path $newProject -Force
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\travelstaytion-parity-tool-phase6.zip" `
+  -DestinationPath $newProject `
+  -Force
+
+Step 2 — copy the durable evidence, not the old virtual environment
+--------------------------------------------------------------------
+Copy-Item `
+  -Path "$oldProject\.parity" `
+  -Destination "$newProject\.parity" `
+  -Recurse `
+  -Force
+
+Step 3 — build a fresh environment
+----------------------------------
+cd $newProject
+
+py -3.14 -m venv .venv
+
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+
+Step 4 — prove the clean project
+--------------------------------
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected for the complete clean project:
+
+  116 passed
+
+Stop after the tests and send the complete output. Do not delete the old folder
+and do not run a live OTA command. The final Booking replay will be run offline
+from the copied evidence after the clean test suite passes.

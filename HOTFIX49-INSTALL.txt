@@ -1,0 +1,36 @@
+TravelStaytion parity tool - Windows newline test fix / Hotfix 49
+================================================================
+
+What this release does
+----------------------
+
+- Fixes the one Windows-only test failure in
+  test_local_app_serves_result_downloads.
+- Writes the CSV fixture as exact bytes so Windows does not translate LF line
+  endings to CRLF before the download endpoint serves it.
+- Does not change application behaviour, pricing, discovery or the focused
+  single-search interface delivered in Hotfix 48.
+
+Install
+-------
+
+Expand this ZIP over the existing Hotfix 48 project directory:
+
+    Expand-Archive `
+      -Path "$env:USERPROFILE\Downloads\parity-tool-windows-newline-test-hotfix49.zip" `
+      -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+      -Force
+
+    cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+Test
+----
+
+    .\.venv\Scripts\python.exe -m pytest -q
+
+Expected result: 281 passed.
+
+Launch
+------
+
+    .\.venv\Scripts\python.exe -m parity.cli app

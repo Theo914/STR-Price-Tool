@@ -1,0 +1,35 @@
+PHASE 7 HOTFIX 18 — IDENTITY PROOF AUDIT HARDENING
+=================================================
+
+The accepted Vrbo/Expedia proof archive confirmed both VERIFIED decisions and
+all fixture checksums. Its audit also exposed two boundaries that are tightened
+by this patch:
+
+- Expedia snapshots now retain only photos whose path contains the exact
+  numeric hotel id; recommendation-card images are excluded.
+- TravelStaytion CDN photos are now classified as image requests, bounded to
+  forty per run and excluded from future fixture storage.
+
+This patch requires no new live request. Existing page snapshots and photo
+hashes remain valid.
+
+Install in PowerShell
+---------------------
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-phase7-hotfix18.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result
+---------------
+
+129 passed
+
+STOP after the test run and send the complete result. Do not make another live
+Vrbo or Expedia request. The next command will replay the existing Expedia
+snapshot offline to prove that recommendation images are excluded.

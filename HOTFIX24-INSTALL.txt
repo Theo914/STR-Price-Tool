@@ -1,0 +1,28 @@
+HOTFIX 24 — BOOKING RATE-ROW JOIN AND TERMINAL BREAKDOWN
+=======================================================
+
+The Hotfix 23 diagnostic proved that Booking can reorder cancellation metadata
+around its embedded breakdown. Hotfix 24 joins each structured rate to its
+bounded rendered table row by exact subtotal, then uses that row's stable block
+id and cancellation policy. Successful quotes now print every fee, tax and
+discount directly in the terminal as well as in the JSON report.
+
+Install in PowerShell
+---------------------
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-booking-hotfix24.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result
+---------------
+
+182 passed
+
+STOP after the test run and send the complete result. Do not make another live
+Booking, Vrbo, Expedia or Marriott request until the result has been reviewed.

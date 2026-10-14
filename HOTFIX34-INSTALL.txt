@@ -1,0 +1,39 @@
+TravelStaytion parity tool — Hotfix 34
+======================================
+
+Purpose
+-------
+Correct the refundability gate reached by the 3 Bedford House live quote on
+12 October 2026.
+
+Hotfix 33 successfully extracted the Booking guest price, but comparison was
+stopped because the embedded price object omitted cancellation metadata even
+though Booking's sole visible rate row explicitly said "Non-refundable".
+
+Hotfix 34:
+
+1. restores cancellation evidence from the rendered Booking row when there is
+   exactly one selectable rate and the row has one unambiguous policy;
+2. compares aligned guest-visible prices even when refundability is missing or
+   differs; and
+3. preserves any refundability limitation as a clearly labelled TERMS note.
+
+Dates, guest count and currency must still match exactly. Price arithmetic and
+mandatory-charge safeguards are unchanged.
+
+Install
+-------
+Expand this ZIP over the existing Hotfix 33 travelstaytion-parity-tool folder
+using PowerShell's Expand-Archive -Force command.
+
+Verification
+------------
+Run:
+
+    .\.venv\Scripts\python.exe -m pytest -q
+
+Expected result on Theo's Windows machine:
+
+    211 passed
+
+Stop after the tests and return the complete result before another live run.

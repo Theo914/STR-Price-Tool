@@ -1,0 +1,32 @@
+TravelStaytion parity tool — Hotfix 13
+Bounded Booking.com availability-table diagnostic
+
+What this fixes
+---------------
+The first Booking pricing diagnostic worked safely, but its selectors captured
+only “We Price Match” and missed the two visible villa rates. Hotfix 13 widens
+the structured diagnostic to Booking's availability table. It still does not
+accept either visible rate as a quote and it never stores raw HTML.
+
+Install (PowerShell)
+--------------------
+Keep the existing folder name and virtual environment.
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-v5-hotfix13.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\parity-tool-phase4-verify-v5" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\parity-tool-phase4-verify-v5"
+
+Run the offline test suite
+--------------------------
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected for Theo's incremental Windows installation:
+
+  104 passed
+
+Stop after the test suite and send the complete final line. Do not repeat the
+Booking pricing command yet. The next live diagnostic remains a separately
+controlled one-request step after the installation result is reviewed.

@@ -1,0 +1,32 @@
+TravelStaytion parity tool — Hotfix 15
+Final Booking.com incomplete-evidence outcome
+
+What this changes
+-----------------
+Booking's exact EUR 2,201.20 rate reconciles, but its included taxes and charges
+are not separately quantified. Hotfix 15 preserves the full rate evidence and
+returns INCOMPLETE_EVIDENCE with no comparable total. It does not weaken the
+tax-normalised comparison rule and requires no further live Booking request.
+
+Install (PowerShell)
+--------------------
+Keep the existing folder name and virtual environment.
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-v5-hotfix15.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\parity-tool-phase4-verify-v5" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\parity-tool-phase4-verify-v5"
+
+Run the offline test suite
+--------------------------
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected for Theo's incremental Windows installation:
+
+  108 passed
+
+Stop after the test suite and send the complete final line. Do not run another
+live Booking command. The next checkpoint is an offline replay of the existing
+final tax diagnostic fixture.

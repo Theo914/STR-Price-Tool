@@ -1,0 +1,46 @@
+TravelStaytion parity tool - evidence reuse and UI improvements / Hotfix 46
+============================================================================
+
+What this fixes
+---------------
+
+- Reuses Booking and Airbnb candidate links already present in older local
+  .parity databases, including the Booking listing previously found for a TS ID.
+- An older verified mapping is only a high-priority candidate: it must pass the
+  current identity gate again before the app requests a price.
+- Keeps likely and alternative OTA links visible for manual checking when
+  identity cannot be proved.
+- Adds a Clear button to the launcher and a New check/back button to results.
+- Adds Copy link controls and CSV/JSON exports.
+- Keeps the technical log tucked away while showing the current step.
+- Remembers unfinished launcher entries on this computer.
+- Changes the TravelStaytion accent to dark forest green.
+
+Install
+-------
+
+Open PowerShell and run:
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-evidence-reuse-ui-hotfix46.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result: 273 passed.
+
+Launch and check 1069699
+------------------------
+
+.\.venv\Scripts\python.exe -m parity.cli app
+
+Enter 1069699 and click "Find, verify and compare". Keep PowerShell open while
+using the app. The workflow searches the existing .parity evidence tree as well
+as the live discovery providers. If the prior Booking URL is still in those
+local databases, it will be retried and displayed. It is priced only after
+fresh identity verification.
+
+When finished, close the app window and press Ctrl+C in PowerShell.

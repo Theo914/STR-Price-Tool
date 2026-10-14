@@ -1,0 +1,35 @@
+PHASE 7 HOTFIX 20 — VRBO PRICE-DETAILS DIAGNOSTIC
+================================================
+
+The first governed Vrbo pricing capture was valid but unusable for comparison:
+Vrbo displayed an ambiguous $466 total despite requested EUR and bundled all
+fees without separately quantifying fees or taxes.
+
+This patch:
+
+- reports that exact currency/itemisation failure during offline replay;
+- clicks at most one bounded public price-details control during an explicitly
+  authorised live diagnostic;
+- captures only bounded dialog/sheet price text and currency indicators;
+- keeps displayed_total empty and line_items empty during capture;
+- never promotes arbitrary visible money text into a quote.
+
+Install in PowerShell
+---------------------
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-phase7-hotfix20.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result
+---------------
+
+163 passed
+
+STOP after the test run and send the complete result. Do not repeat the Vrbo
+diagnostic until the test result is reviewed. Do not run Expedia or Marriott.

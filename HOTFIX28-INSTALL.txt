@@ -1,0 +1,37 @@
+HOTFIX 28 — AUTOMATIC SAFE-DATE SELECTION
+==========================================
+
+Hotfix 28 completes the automatic selection increment of Phase 7. A live
+`quote --auto-dates` run now generates bounded Monday-to-Monday candidate
+windows around 60 days ahead, probes TravelStaytion first, and applies the first
+priced seven-night window unchanged to the verified competitor.
+
+Safety rules:
+
+- maximum eight TravelStaytion pricing probes by default;
+- a matching request-governor budget of eight;
+- continue only after explicit UNAVAILABLE or MIN_STAY outcomes;
+- stop on errors or uncertain evidence;
+- no automatic dates in offline replay;
+- no mixing automatic mode with explicit check-in/check-out dates;
+- record every probe and the selected window in JSON evidence.
+
+Install in PowerShell
+---------------------
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-auto-dates-hotfix28.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result
+---------------
+
+196 passed
+
+STOP after the test run and send the complete result. Do not make a live channel
+request until the result has been reviewed.

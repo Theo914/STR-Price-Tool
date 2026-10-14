@@ -1,0 +1,43 @@
+TravelStaytion parity tool — Hotfix 30
+======================================
+
+Purpose
+-------
+Fix TravelStaytion discount handling before parity comparison.
+
+The live Villa Andrews response reported:
+
+- pre-discount comparable total: EUR 1,552.18;
+- long-stay discount: EUR 71.61;
+- corrected comparable total: EUR 1,480.57;
+- displayed total: EUR 1,480.58;
+- rounding difference: EUR -0.01.
+
+Hotfix 29 incorrectly compared Booking against the pre-discount amount, which
+overstated Booking's saving as EUR 164.68 / 10.61%. With the discount applied,
+the expected result for the captured evidence is EUR 93.07 / 6.29%.
+
+The adapter now:
+
+- prefers exact decimal discount, cleaning and deposit values;
+- subtracts the TravelStaytion discount from its comparable total;
+- distinguishes tax from discount when reconciling the displayed total;
+- fails closed when the discounted arithmetic disagrees by more than EUR 0.02;
+- records TravelStaytion accommodation, discount, cleaning and tax lines.
+
+Install
+-------
+Expand this ZIP over the existing Hotfix 29 travelstaytion-parity-tool folder
+using PowerShell's Expand-Archive -Force command.
+
+Verification
+------------
+Run:
+
+    .\.venv\Scripts\python.exe -m pytest -q
+
+Expected result on Theo's Windows machine:
+
+    203 passed
+
+Stop after the tests. Do not rely on the Hotfix 29 10.61% live result.

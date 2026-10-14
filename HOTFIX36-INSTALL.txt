@@ -1,0 +1,41 @@
+TravelStaytion parity tool — Hotfix 36
+======================================
+
+Purpose
+-------
+Correct the explicit-date offline replay path exposed by the 3 Bedford House
+proof on 12 October 2026.
+
+Hotfix 35 correctly changed the parity basis to guest-visible displayed totals.
+The offline replay then revealed that `quote` only loaded the TravelStaytion
+side when dates had originally been selected with `--auto-dates`. When exact
+`--checkin` and `--checkout` dates were supplied, it replayed the candidate
+channel alone and therefore produced no comparison.
+
+Hotfix 36 makes every explicit-date quote obtain both prices for the same:
+
+* property mapping;
+* check-in and checkout dates;
+* guest count; and
+* currency.
+
+This applies consistently to Booking, Airbnb, Vrbo and Expedia quote paths.
+Offline mode still makes zero live requests and requires exact saved fixtures.
+
+Install
+-------
+Expand this ZIP over the existing Hotfix 35 travelstaytion-parity-tool folder
+using PowerShell's Expand-Archive -Force command.
+
+Verification
+------------
+Run:
+
+    .\.venv\Scripts\python.exe -m pytest -q
+
+Expected result on Theo's Windows machine:
+
+    213 passed
+
+Stop after the tests and return the complete result before the final offline
+replay.

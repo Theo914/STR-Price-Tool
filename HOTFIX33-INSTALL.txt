@@ -1,0 +1,44 @@
+TravelStaytion parity tool — Hotfix 33
+======================================
+
+Purpose
+-------
+Correct the Booking pricing failure proven by the 3 Bedford House diagnostic
+captured on 12 October 2026.
+
+Booking displayed one non-refundable rate for 15–22 February 2027:
+
+    Original price: GBP 1,400
+    Current guest price: GBP 756
+    Property discount: GBP 644 (46%)
+    Taxes and charges: included
+
+The embedded Booking breakdown also declared the rate all-inclusive and its
+excluded-charge total was exactly zero. Booking nevertheless supplied one
+zero-total marker in its excluded-charge list. Hotfix 32 treated the mere
+presence of that marker as an unsupported charge and returned ERROR.
+
+Hotfix 33 accepts this narrow shape only when Booking explicitly reports:
+
+* an all-inclusive rate;
+* an excluded-charge total of exactly zero; and
+* no conditional, non-mandatory or add-on charges.
+
+A non-zero or missing excluded-charge total still fails closed.
+
+Install
+-------
+Expand this ZIP over the existing Hotfix 32 travelstaytion-parity-tool folder
+using PowerShell's Expand-Archive -Force command.
+
+Verification
+------------
+Run:
+
+    .\.venv\Scripts\python.exe -m pytest -q
+
+Expected result on Theo's Windows machine:
+
+    210 passed
+
+Stop after the tests and return the complete result before another live run.

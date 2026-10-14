@@ -1,0 +1,21 @@
+[
+  {
+    "_comment": "Casa Tatano, Massa Lubrense -- the case this tool was validated against live on 22 Sep 2026. See parity-price-verification-2026-09-22.md for the full verified price table.",
+    "subject": "https://www.travelstaytion.com/stay/210890",
+    "against": [
+      "https://www.airbnb.co.uk/rooms/4554005",
+      "https://www.airbnb.co.uk/rooms/12598753",
+      "https://www.airbnb.co.uk/rooms/2595349"
+    ],
+    "checkin": "2026-10-04",
+    "checkout": "2026-10-11",
+    "guests": 2,
+    "verified_against": [
+      {
+        "url": "https://homes-and-villas.marriott.com/en/properties/78114516",
+        "reviewed_by": "Example reviewer",
+        "note": "Previously confirmed for the Casa Tatano research case by exact licence evidence"
+      }
+    ]
+  }
+]

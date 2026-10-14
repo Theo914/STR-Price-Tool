@@ -1,0 +1,57 @@
+TravelStaytion parity tool - focused single search / Hotfix 48
+==============================================================
+
+What this release does
+----------------------
+
+- Removes the portfolio mode from Parity Desk and accepts exactly one
+  TravelStaytion listing ID or URL per check.
+- Keeps Hotfix 47's independent Booking discovery: up to four current searches,
+  several ranked candidates and identity verification until a candidate proves
+  itself.
+- Keeps Airbnb discovery independent of previously saved mappings.
+- Prices only verified OTA matches.
+- Shows likely but unverified Airbnb and Booking links for manual review.
+- Adds immediate ID/URL validation, a canonical TravelStaytion URL preview,
+  Enter-to-run, Clear and four understandable progress stages.
+- Keeps New check, copy/open listing links and CSV/JSON exports on results.
+- Uses dark forest green for TravelStaytion, Airbnb coral and Booking blue;
+  red and green remain reserved for the price verdict.
+
+Install
+-------
+
+Expand this ZIP over the existing project directory:
+
+    Expand-Archive `
+      -Path "$env:USERPROFILE\Downloads\parity-tool-single-search-hotfix48.zip" `
+      -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+      -Force
+
+    cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+Test
+----
+
+    .\.venv\Scripts\python.exe -m pytest -q
+
+Expected result: 281 passed.
+
+Launch
+------
+
+    .\.venv\Scripts\python.exe -m parity.cli app
+
+Enter `1069699` or a full TravelStaytion `/stay/` URL, choose guests and leave
+currency on Auto-detect unless a specific three-letter currency is required.
+Click "Find, verify and compare". Keep PowerShell open while the app is running;
+press Ctrl+C there when finished.
+
+Acceptance rule
+---------------
+
+The local suite proves parsing, bounded discovery, ranked multi-candidate
+verification, fail-closed pricing, replay and interface logic. Live acceptance
+still requires the controlled Windows browser run. A missing or unverified OTA
+must remain visible without a price; it must never be silently treated as a
+successful match.

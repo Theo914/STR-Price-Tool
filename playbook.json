@@ -1,0 +1,69 @@
+{
+  "domain_signatures": {
+    "travelstaytion.com": "travelstaytion",
+    "airbnb.": "airbnb",
+    "vrbo.com": "vrbo_expedia",
+    "expedia.": "expedia",
+    "booking.com": "booking",
+    "homes-and-villas.marriott.com": "marriott",
+    "guestybookings.com": "guesty",
+    "holidayfuture.com": "hostaway",
+    "crs.avantio.com (script sniff)": "avantio",
+    "websites-static.lodgify.com / checkout.lodgify.com (script sniff)": "lodgify",
+    "static-production-nextjs.hostaway.com / booking-engine.hostaway.com (script sniff)": "hostaway"
+  },
+  "recipes": {
+    "travelstaytion": {
+      "notes": "Quote API price.totalNoDiscountDecimal is the comparable total; cleaning already folded in; tourist tax = totalDecimal - totalNoDiscountDecimal.",
+      "last_confirmed": "2026-09-22"
+    },
+    "airbnb": {
+      "notes": "Embedded JSON in data-deferred-state-0. Same house can have multiple listings/hosts at different prices -- always treat as a duplicate-listing scenario, not an error.",
+      "last_confirmed": "2026-09-22"
+    },
+    "avantio": {
+      "notes": "Direct sites detected via crs.avantio.com script tag, not hostname. 'Not included in price (cash on site)' block is usually the tourist tax -- exclude from comparable total.",
+      "last_confirmed": "2026-09-22"
+    },
+    "lodgify": {
+      "notes": "Comparable = rentalPrice.totalWithPromotions + fees.total, excluding localTaxes. Need slug + propertyId, which come from the site's own network calls, not the visible URL.",
+      "last_confirmed": "2026-09-22"
+    },
+    "hostaway": {
+      "notes": "GOTCHA: headline totalPrice includes the damage deposit. Comparable = sum of accommodation + fee components only, excluding damageDeposit and tax components.",
+      "last_confirmed": "2026-09-22"
+    },
+    "vrbo_expedia": {
+      "notes": "Structured identity only. Capture a bounded public snapshot and verify registration or gallery evidence. Pricing remains locked pending reconciled checkout evidence.",
+      "last_confirmed": "2026-09-29"
+    },
+    "expedia": {
+      "notes": "Expedia is a separate distribution surface and must be observed independently from Vrbo. Structured identity is enabled; pricing remains locked pending reconciled evidence.",
+      "last_confirmed": "2026-09-29"
+    },
+    "booking": {
+      "notes": "Needs real rendering + has bot detection. b_price_breakdown_simplified holds included/excluded/conditional charges.",
+      "last_confirmed": "2026-09-22"
+    },
+    "marriott": {
+      "notes": "Structured identity only. Canonicalise the numeric Homes & Villas property URL and verify exact registration or gallery evidence. Pricing remains locked.",
+      "last_confirmed": "2026-09-29"
+    },
+    "guesty": {
+      "notes": "Backend API returns nothing to a plain fetch -- must read the rendered page text (Subtotal/Fees/Total).",
+      "last_confirmed": "2026-09-22"
+    }
+  },
+  "gotchas": [
+    {
+      "site": "hostaway",
+      "note": "Damage deposit folded into the headline total overstated one tested property's price by 27%. Always strip it.",
+      "added": "2026-09-22"
+    },
+    {
+      "site": "photo_matching",
+      "note": "Simple dHash overlapped true matches and unrelated photos on TravelStaytion's re-processed images. Use the DCT pHash in parity/core/matching.py, not a plain difference hash.",
+      "added": "2026-09-22"
+    }
+  ]
+}

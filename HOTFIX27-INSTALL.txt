@@ -1,0 +1,31 @@
+HOTFIX 27 — SAFE-DATE POLICY FOUNDATION
+========================================
+
+Hotfix 27 adds the first Phase 7 guardrails. Live `quote` commands now read the
+current operating date and reject check-ins that have passed or are less than
+30 days away. Exact offline fixture replay is unchanged. The core also produces
+deterministic, bounded seven-night candidate windows around 60 days ahead for
+the next availability-selection increment.
+
+This is the Phase 7 foundation. It does not yet probe TravelStaytion to choose
+the first available candidate window automatically.
+
+Install in PowerShell
+---------------------
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-safe-dates-hotfix27.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result
+---------------
+
+193 passed
+
+STOP after the test run and send the complete result. Do not make a live channel
+request until the result has been reviewed.

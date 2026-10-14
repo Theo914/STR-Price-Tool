@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parity viewer</title>
+<style>
+  /* One typeface, one accent. It's an ops tool: the numbers are the design. */
+  :root{
+    --ink:#1c2430; --muted:#6b7480; --line:#d9dee5; --paper:#fbfbf9; --panel:#ffffff;
+    --up:#0f7a4d;   /* OTA higher than TS -> green (we're competitive) */
+    --down:#b3261e; /* OTA lower than TS  -> red   (we're undercut)   */
+    --hi:#e8efe9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.45 "Segoe UI",system-ui,sans-serif;color:var(--ink);background:var(--paper)}
+  header{display:flex;gap:24px;align-items:baseline;padding:20px 28px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em}
+  header p{margin:0;color:var(--muted)}
+  main{padding:20px 28px;max-width:1400px}
+  .loaders{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:20px}
+  .loader{border:1px dashed var(--line);border-radius:6px;padding:12px 14px;background:var(--panel)}
+  .loader b{display:block;margin-bottom:4px}
+  .loader small{color:var(--muted)}
+  .loader.ok{border-style:solid;background:var(--hi)}
+  .controls{display:flex;gap:12px;align-items:center;margin:8px 0 16px;flex-wrap:wrap}
+  select,button{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink)}
+  button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  button:focus-visible,select:focus-visible{outline:2px solid var(--up);outline-offset:2px}
+  table{border-collapse:collapse;width:100%;background:var(--panel);font-variant-numeric:tabular-nums}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{font-weight:600;color:var(--muted);font-size:13px;position:sticky;top:0;background:var(--panel)}
+  td.num,th.num{text-align:right}
+  .up{color:var(--up);font-weight:600}
+  .down{color:var(--down);font-weight:600}
+  .blank{color:var(--muted)}
+  .gap-pos{color:var(--down);font-weight:600}
+  .gap-neg{color:var(--up);font-weight:600}
+  h2{font-size:16px;margin:28px 0 10px}
+  .rec{background:var(--hi);font-weight:600}
+  .empty{padding:32px;border:1px solid var(--line);border-radius:6px;color:var(--muted);background:var(--panel)}
+  .note{color:var(--muted);font-size:13px;margin-top:6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Parity viewer</h1>
+  <p>Load the three CSVs from <code>data/</code>. Nothing is uploaded anywhere; it all runs in this page.</p>
+</header>
+<main>
+  <div class="loaders">
+    <label class="loader" id="l-listings"><b>listings.csv</b><small>one row per TS listing</small><br><input type="file" accept=".csv" data-key="listings"></label>
+    <label class="loader" id="l-prices"><b>prices.csv</b><small>one row per listing × OTA × window</small><br><input type="file" accept=".csv" data-key="prices"></label>
+    <label class="loader" id="l-comps"><b>comps.csv</b><small>one row per listing × window</small><br><input type="file" accept=".csv" data-key="comps"></label>
+  </div>
+
+  <div class="controls">
+    <label>Host <select id="host"><option value="">All hosts</option></select></label>
+    <label>Window <select id="win"><option value="W7">W7 (7 nights)</option><option value="W3">W3 (3 nights)</option></select></label>
+    <button class="primary" id="export">Export call sheet (CSV)</button>
+  </div>
+
+  <div id="out" class="empty">Load listings.csv and prices.csv to see the table. comps.csv is optional; without it the market column stays blank.</div>
+</main>
+
+<script>
+/* ---------- tiny CSV parser (handles quotes, commas in quotes, CRLF) ---------- */
+function parseCSV(text){
+  const rows=[];let row=[],cell='',q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i],n=text[i+1];
+    if(q){ if(c==='"'&&n==='"'){cell+='"';i++;} else if(c==='"'){q=false;} else cell+=c; }
+    else if(c==='"')q=true;
+    else if(c===','){row.push(cell);cell='';}
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&n==='\n')i++; row.push(cell);rows.push(row);row=[];cell=''; }
+    else cell+=c;
+  }
+  if(cell!==''||row.length){row.push(cell);rows.push(row);}
+  const head=rows.shift().map(h=>h.trim());
+  return rows.filter(r=>r.some(v=>v!=='')).map(r=>Object.fromEntries(head.map((h,i)=>[h,(r[i]??'').trim()])));
+}
+const num=v=>{ if(v===''||v==null)return null; const x=Number(String(v).replace(/[^\d.\-]/g,'')); return Number.isFinite(x)?x:null; };
+const fmt=(v,cur)=>v==null?'<span class="blank">—</span>':`${cur||''} ${v.toLocaleString(undefined,{maximumFractionDigits:0})}`;
+
+/* ---------- state ---------- */
+const data={listings:null,prices:null,comps:null};
+document.querySelectorAll('input[type=file]').forEach(inp=>{
+  inp.addEventListener('change',async e=>{
+    const key=inp.dataset.key; const f=e.target.files[0]; if(!f)return;
+    data[key]=parseCSV(await f.text());
+    document.getElementById('l-'+key).classList.add('ok');
+    if(key==='listings')fillHosts();
+    render();
+  });
+});
+document.getElementById('host').onchange=render;
+document.getElementById('win').onchange=render;
+document.getElementById('export').onclick=exportCSV;
+
+/* If build-report.js embedded the CSVs, load them straight away and hide the file pickers. */
+if(window.PARITY_DATA){
+  for(const key of ['listings','prices','comps']){
+    if(window.PARITY_DATA[key]){ data[key]=parseCSV(window.PARITY_DATA[key]); document.getElementById('l-'+key).classList.add('ok'); }
+  }
+  document.querySelector('.loaders').style.display='none';
+  document.querySelector('header p').textContent='Built from data/ on '+new Date().toLocaleString()+'. Re-run "node build-report.js" after new checks.';
+  if(data.listings){ fillHosts(); render(); }
+}
+
+function fillHosts(){
+  const sel=document.getElementById('host');
+  const hosts=[...new Set(data.listings.map(l=>l.host_email||l.host_id).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">All hosts</option>'+hosts.map(h=>`<option>${h}</option>`).join('');
+}
+
+/* ---------- the comparison logic: keep in sync with CLAUDE.md ---------- */
+function analyse(listing,win){
+  const rows=(data.prices||[]).filter(p=>p.listing_id===listing.listing_id&&p.window===win);
+  const ts=rows.find(p=>/travelstaytion/i.test(p.ota));
+  const tsTotal=ts?num(ts.total):null;
+  const others=rows.filter(p=>p!==ts).map(p=>({ota:p.ota,found:p.found,total:num(p.total),los:p.los_discount,url:p.ota_url}));
+  const priced=others.filter(o=>o.total!=null);
+  const cheapest=priced.length?priced.reduce((a,b)=>a.total<b.total?a:b):null;
+  const parityGap=(tsTotal!=null&&cheapest)?(tsTotal-cheapest.total)/cheapest.total:null;
+
+  const comp=(data.comps||[]).find(c=>c.listing_id===listing.listing_id&&c.window===win);
+  const median=comp?num(comp.median_total):null, p25=comp?num(comp.p25_total):null;
+  const marketGap=(tsTotal!=null&&median!=null)?(tsTotal-median)/median:null;
+
+  // Recommended = lower of cheapest OTA and comp median, floored at comp P25. Blank if we lack the inputs.
+  let rec=null;
+  const candidates=[cheapest?cheapest.total:null,median].filter(v=>v!=null);
+  if(candidates.length){ rec=Math.min(...candidates); if(p25!=null)rec=Math.max(rec,p25); }
+  return {rows,ts,tsTotal,others,cheapest,parityGap,comp,median,p25,marketGap,rec,currency:(ts&&ts.currency)||listing.currency||''};
+}
+
+function render(){
+  const out=document.getElementById('out');
+  if(!data.listings||!data.prices)return;
+  const host=document.getElementById('host').value, win=document.getElementById('win').value;
+  const listings=data.listings.filter(l=>!host||(l.host_email||l.host_id)===host);
+  if(!listings.length){out.className='empty';out.textContent='No listings for that host.';return;}
+  const otas=[...new Set(data.prices.filter(p=>!/travelstaytion/i.test(p.ota)).map(p=>p.ota))].sort();
+
+  let html=`<table><thead><tr><th>Listing</th><th>Host</th><th class="num">TS total</th>`+
+    otas.map(o=>`<th class="num">${o}</th>`).join('')+
+    `<th class="num">Cheapest</th><th class="num">Parity gap</th><th class="num">Comp median</th><th class="num">Market gap</th><th class="num">Recommended TS</th></tr></thead><tbody>`;
+  const sheet=[];
+  for(const l of listings){
+    const a=analyse(l,win);
+    const cells=otas.map(o=>{
+      const r=a.others.find(x=>x.ota===o);
+      if(!r)return `<td class="num blank">not checked</td>`;
+      if(r.found&&r.found.toLowerCase()==='no')return `<td class="num blank">not listed</td>`;
+      if(r.total==null)return `<td class="num blank">—</td>`;
+      const cls=a.tsTotal==null?'':(r.total>a.tsTotal?'up':(r.total<a.tsTotal?'down':''));
+      return `<td class="num ${cls}">${fmt(r.total,a.currency)}${r.los==='yes'?' <small>(LOS)</small>':''}</td>`;
+    }).join('');
+    const pct=v=>v==null?'<span class="blank">—</span>':`<span class="${v>0?'gap-pos':'gap-neg'}">${(v*100).toFixed(0)}%</span>`;
+    html+=`<tr><td><a href="${l.ts_url}" target="_blank" rel="noopener">${l.listing_id}</a><br><small>${l.title||''}</small></td><td>${l.host_email||l.host_id||''}</td>`+
+      `<td class="num">${fmt(a.tsTotal,a.currency)}</td>${cells}`+
+      `<td class="num">${a.cheapest?`${a.cheapest.ota}<br>${fmt(a.cheapest.total,a.currency)}`:'<span class="blank">—</span>'}</td>`+
+      `<td class="num">${pct(a.parityGap)}</td><td class="num">${fmt(a.median,a.currency)}</td><td class="num">${pct(a.marketGap)}</td>`+
+      `<td class="num rec">${fmt(a.rec,a.currency)}</td></tr>`;
+    sheet.push({listing_id:l.listing_id,title:l.title,host:l.host_email||l.host_id,window:win,ts_total:a.tsTotal,cheapest_ota:a.cheapest?a.cheapest.ota:'',cheapest_total:a.cheapest?a.cheapest.total:'',parity_gap_pct:a.parityGap==null?'':(a.parityGap*100).toFixed(1),comp_median:a.median??'',market_gap_pct:a.marketGap==null?'':(a.marketGap*100).toFixed(1),recommended_ts:a.rec??'',currency:a.currency});
+  }
+  html+='</tbody></table><p class="note">Green = that OTA is dearer than TS. Red = we are being undercut. Blank = not captured; never a guess. Recommended = lower of cheapest OTA and comp median, never below comp P25.</p>';
+  out.className='';out.innerHTML=html;
+  render.sheet=sheet;
+}
+
+function exportCSV(){
+  const rows=render.sheet||[]; if(!rows.length)return alert('Nothing to export yet.');
+  const head=Object.keys(rows[0]);
+  const csv=[head.join(',')].concat(rows.map(r=>head.map(h=>`"${String(r[h]??'').replace(/"/g,'""')}"`).join(','))).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`call-sheet-${document.getElementById('host').value||'all'}-${document.getElementById('win').value}.csv`;a.click();
+}
+</script>
+</body>
+</html>

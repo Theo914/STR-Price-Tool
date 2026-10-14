@@ -1,0 +1,16 @@
+{
+  "body_bytes": 107278,
+  "body_sha256": "905e67367c0a5884d36da7a029d6aa824c647a587f668e40ca61e77611d05bec",
+  "captured_at": "2026-09-29T09:07:21.805910+00:00",
+  "expires_at": "2026-10-29T09:07:21.805910+00:00",
+  "fixture_version": 1,
+  "headers": {
+    "content-type": "application/json;charset=utf-8"
+  },
+  "request_key": "a9f1d127e620c4ff95e21bf60672dd55861c229a73351353398947d252810530",
+  "request_method": "POST",
+  "request_url": "https://www.airbnb.com.au/api/v3/StaysPdpSections/c47b106f155568d32d4396fac7bdd31dbffb3dead2ad9e5f1cf93a94bf7e5c75?operationName=StaysPdpSections&locale=en-AU&currency=EUR",
+  "response_url": "https://www.airbnb.com.au/api/v3/StaysPdpSections/c47b106f155568d32d4396fac7bdd31dbffb3dead2ad9e5f1cf93a94bf7e5c75?operationName=StaysPdpSections&locale=en-AU&currency=EUR",
+  "sanitisation": "common token fields redacted; response headers allow-listed; cookies and request headers omitted; content-encoding omitted because stored bytes are already decoded",
+  "status_code": 200
+}

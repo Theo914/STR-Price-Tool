@@ -1,0 +1,40 @@
+TravelStaytion parity tool — Hotfix 32
+======================================
+
+Purpose
+-------
+Correct two faults proven by the Brighton diagnostic captured on
+12 October 2026.
+
+1. `--currency GBP` was applied to Booking but the TravelStaytion quote
+   request was still hard-coded to EUR. The requested currency is now sent
+   to both sides. If TravelStaytion returns a different currency, comparison
+   stops instead of mixing currencies.
+
+2. TravelStaytion's exact response for the Brighton windows was:
+
+       There is a minimum stay limitation, please try different period
+
+   Those dates can therefore appear open in the calendar while a 3-night or
+   7-night selection is not priceable. The tool now reports `min_stay` and
+   prints that explanation instead of incorrectly saying `unavailable`.
+
+If every automatic window is rejected for the same reason, the final message
+now tells you to increase `--stay-nights`.
+
+Install
+-------
+Expand this ZIP over the existing Hotfix 31 travelstaytion-parity-tool folder
+using PowerShell's Expand-Archive -Force command.
+
+Verification
+------------
+Run:
+
+    .\.venv\Scripts\python.exe -m pytest -q
+
+Expected result on Theo's Windows machine:
+
+    208 passed
+
+Stop after the tests and return the complete result before another live run.

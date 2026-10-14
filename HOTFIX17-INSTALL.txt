@@ -1,0 +1,32 @@
+PHASE 7 HOTFIX 17 — VRBO GALLERY REPLAY CORRECTION
+==================================================
+
+The first live Vrbo identity result was VERIFIED from four independent photo
+matches. Its log also exposed one invalid gallery value: a normal www.vrbo.com
+page URL was treated as an image and failed decoding. Hotfix 17 removes that
+value during snapshot replay and places real media.vrbo.com downloads under the
+bounded Expedia Group image request class.
+
+This correction does not need another live capture. Keep the existing
+.parity\phase7-vrbo-fixtures and photo-hash database unchanged.
+
+Install in PowerShell
+---------------------
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-phase7-hotfix17.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result
+---------------
+
+127 passed
+
+STOP after the test run and send the complete result for review. Do not repeat
+the live Vrbo request. The next command will replay the existing snapshot and
+photo hashes offline.

@@ -1,0 +1,46 @@
+TravelStaytion parity tool — Hotfix 35
+======================================
+
+Purpose
+-------
+Correct the primary parity verdict proven wrong by the 3 Bedford House live
+quote on 12 October 2026.
+
+The successful Hotfix 34 capture showed:
+
+    TravelStaytion displayed guest total: GBP 724.52
+    Booking displayed guest total:        GBP 756.00
+
+The old verdict removed Booking's separately captured GBP 126 VAT and compared
+GBP 630 against TravelStaytion's GBP 724.51. That produced the opposite answer
+to the question this tool is meant to answer: what price does a potential guest
+see on each channel?
+
+Hotfix 35 makes displayed guest totals the primary parity basis. For this case
+the correct verdict is:
+
+    Booking is GBP 31.48 more expensive (4.34%).
+
+The component totals that exclude separately captured taxes and deposits remain
+in JSON and console output as secondary audit evidence. They no longer decide
+the guest-price verdict.
+
+Dates, guest count and currency must still match exactly. Both channels must
+provide valid positive displayed totals before a comparison is produced.
+
+Install
+-------
+Expand this ZIP over the existing Hotfix 34 travelstaytion-parity-tool folder
+using PowerShell's Expand-Archive -Force command.
+
+Verification
+------------
+Run:
+
+    .\.venv\Scripts\python.exe -m pytest -q
+
+Expected result on Theo's Windows machine:
+
+    213 passed
+
+Stop after the tests and return the complete result before another live run.

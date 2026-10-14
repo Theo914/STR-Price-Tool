@@ -1,0 +1,16 @@
+httpx>=0.27
+beautifulsoup4>=4.12
+Pillow>=10.0
+numpy>=1.26
+scipy>=1.11
+
+# Needed for the browser-rendered channels (Vrbo/Expedia, Booking.com,
+# Guesty). Patchright, not vanilla Playwright: it's a drop-in fork that
+# patches the automation fingerprints (navigator.webdriver, CDP artifacts)
+# that bot detection checks for. Booking.com explicitly has bot detection
+# per the research doc, so this matters, not just a style preference.
+# Same API as Playwright otherwise.
+patchright>=1.45
+
+# dev-only, needed to run tests/:
+pytest>=8.0

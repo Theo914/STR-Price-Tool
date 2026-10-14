@@ -1,0 +1,53 @@
+TravelStaytion parity tool — Hotfix 11
+Signed Windows browser launch for Phase 6
+
+What this fixes
+---------------
+The first Booking.com test never reached Booking.com. Windows closed
+Patchright's bundled Chromium before it opened a page. Hotfix 11 uses the
+installed, signed Microsoft Edge browser on Windows, with installed Google
+Chrome as a fallback. It does not disable or weaken any Windows security
+setting.
+
+Install (PowerShell)
+--------------------
+Keep the existing folder name for this checkpoint. Renaming a folder that
+contains .venv can break paths stored inside the virtual environment.
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-v5-hotfix11.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\parity-tool-phase4-verify-v5" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\parity-tool-phase4-verify-v5"
+
+Step 1 — run the offline test suite
+-----------------------------------
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected for this package: 88 passed. A different pass count is acceptable
+only if there are no failures; send the complete final line.
+
+Step 2 — test browser launch only
+---------------------------------
+.\.venv\Scripts\python.exe tools\test_browser.py
+
+This opens only https://example.com. It does not contact Booking.com or any
+other travel site. A successful result includes:
+
+  Browser channel: msedge
+  Page title: 'Example Domain'
+  Done ... the signed-browser path works.
+
+"Browser channel: chrome" is also acceptable if Edge is unavailable.
+
+Stop after Step 2 and send the complete PowerShell output. Do not rerun the
+Booking.com verify command yet. Once this smoke test passes, the unchanged
+Booking command can be authorised safely.
+
+Folder name
+-----------
+The old phase4 folder name is cosmetic. After the Phase 6 browser checkpoint
+is stable, rename the project by creating a clean new folder and rebuilding
+.venv there; keep the existing .parity evidence and JSON reports. Do not move
+the current .venv in the middle of this repair.

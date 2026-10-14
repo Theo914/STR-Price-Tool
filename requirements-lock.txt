@@ -1,0 +1,10 @@
+# Direct runtime and test dependencies used for the Hotfix 49 handoff.
+# Python 3.12 is the known-good interpreter.
+httpx==0.28.1
+beautifulsoup4==4.15.0
+Pillow==12.3.0
+numpy==2.3.5
+scipy==1.17.0
+patchright==1.63.0
+pytest==9.1.1
+

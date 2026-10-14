@@ -1,0 +1,27 @@
+HOTFIX 26 — BOOKING UNAVAILABLE-DATES DETECTOR
+================================================
+
+Hotfix 26 recognises Booking's public "next available dates" price cards as
+evidence that the exact requested stay is unavailable when the page contains
+no room rows and no structured rate. Alternative-date prices remain diagnostic
+only and are never reported as the requested stay's price.
+
+Install in PowerShell
+---------------------
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-booking-hotfix26.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result
+---------------
+
+186 passed
+
+STOP after the test run and send the complete result. Do not make another live
+Booking, Vrbo, Expedia or Marriott request until the result has been reviewed.

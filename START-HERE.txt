@@ -1,0 +1,25 @@
+TravelStaytion Parity Desk - Technical Handoff (Hotfix 49)
+==========================================================
+
+This folder contains the complete current source tree, tests, fixtures,
+configuration, setup scripts, technical notes and project roadmap.
+
+Windows setup from a fresh extraction:
+
+    powershell -ExecutionPolicy Bypass -File .\SETUP-WINDOWS.ps1
+
+Run the test suite:
+
+    powershell -ExecutionPolicy Bypass -File .\RUN-TESTS.ps1
+
+Launch the single-search application:
+
+    powershell -ExecutionPolicy Bypass -File .\RUN-APP.ps1
+
+Read TECH-HANDOFF.md before changing discovery. The current critical gap is
+that Airbnb and Booking candidates are not discovered licence-first through
+exact reverse search, even though the TravelStaytion page can expose a strong
+licence/registration identifier.
+
+Expected regression result for this handoff: 281 passed.
+

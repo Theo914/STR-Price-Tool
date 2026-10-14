@@ -1,0 +1,40 @@
+TravelStaytion parity tool — Hotfix 31
+======================================
+
+Purpose
+-------
+Handle the Booking rate shape captured on 12 October 2026 without weakening
+the fail-closed pricing rules.
+
+The failed Hotfix 30 capture was not a challenge or unavailable page. Booking
+returned two exact structured rate breakdowns and two rendered rate rows, but
+omitted the cancellation marker from the structured objects. The rendered
+rows still supplied stable block identifiers, cancellation labels and rounded
+whole-euro totals.
+
+The tool now joins a rendered row to a structured rate using:
+
+1. the existing exact-total match when available; or
+2. a rounded whole-euro total only when exactly one structured rate falls
+   inside that rounding bucket.
+
+If two structured rates could match the same rounded total, pricing remains
+ambiguous and fails closed. Exact structured component arithmetic is still
+required before a price is accepted.
+
+Install
+-------
+Expand this ZIP over the existing Hotfix 30 travelstaytion-parity-tool folder
+using PowerShell's Expand-Archive -Force command.
+
+Verification
+------------
+Run:
+
+    .\.venv\Scripts\python.exe -m pytest -q
+
+Expected result on Theo's Windows machine:
+
+    205 passed
+
+Stop after the tests and return the complete result before another live run.

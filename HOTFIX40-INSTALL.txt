@@ -1,0 +1,72 @@
+TravelStaytion parity tool - Phase 12 foundation / Hotfix 40
+============================================================
+
+What this adds
+--------------
+
+- New `portfolio` command for one host and no more than ten listings.
+- One or two verified channels per listing: Airbnb and/or Booking.com.
+- Mandatory persisted identity mapping for every comparison.
+- Common explicit dates across multiple channels under one listing.
+- Automatic minimum-stay selection for a single-channel listing.
+- Combined JSON and CSV output for the future compact interface.
+- Explicit PRICED, UNAVAILABLE, IDENTITY_FAILED, PRICE_FAILED and
+  REVIEW_REQUIRED rows.
+- Per-comparison quote reports, governor databases and resume state.
+- Resume requires both the exact job fingerprint and the saved quote SHA-256.
+- Failed or review-required jobs are not silently treated as complete.
+
+Current deliberate restriction
+------------------------------
+
+A listing with both Airbnb and Booking must provide one explicit common date
+range. Automatic minimum-stay selection across three sites is not yet proven,
+so the tool refuses that combination instead of comparing different stays.
+
+Install
+-------
+
+Open PowerShell and run:
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-phase12-portfolio-hotfix40.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result: 238 passed.
+
+Offline portfolio acceptance proof
+----------------------------------
+
+.\.venv\Scripts\python.exe -m parity.cli portfolio `
+  ".\portfolio-phase12-proof.json" `
+  --offline `
+  --work-dir ".parity\phase12-portfolio-proof" `
+  --output "phase12-portfolio-results.json"
+
+Expected final line:
+
+[parity] PORTFOLIO: 2 listing(s), 2 comparison(s); PRICED=2
+
+Expected result summary:
+
+- Hoxton / Airbnb: TravelStaytion EUR 796.84; Airbnb EUR 742.26.
+- Brighton / Booking: TravelStaytion GBP 3863.00; Booking GBP 5270.00.
+- Airbnb 10% what-if total: EUR 666.06.
+- Booking 10/15/20% what-if totals: GBP 4853.00 / 4644.50 / 4436.00.
+
+Resume proof
+------------
+
+Run the exact same portfolio command a second time.
+
+Expected resume lines:
+
+[parity] portfolio resume hit: 01-hoxton-airbnb (PRICED)
+[parity] portfolio resume hit: 02-brighton-modern-3br-booking (PRICED)
+
+The second run must not print pricing network-request or fixture-hit lines.

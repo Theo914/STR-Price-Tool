@@ -1,0 +1,39 @@
+TravelStaytion parity tool - Airbnb precise total / Hotfix 42
+============================================================
+
+What this fixes
+---------------
+
+Airbnb can return two representations of the same AUD quote:
+
+- a rounded headline card, such as AUD 1,585;
+- an explicitly labelled checkout Total, such as AUD 1,584.17.
+
+Hotfix 42 prefers the explicit checkout Total when it is inside Airbnb's
+anchored BasicPriceDetail component and its currency matches the requested
+currency. The itemised components must still reconcile within the existing
+AUD 0.02 tolerance. Conflicting precise totals, missing currency or genuine
+arithmetic differences still fail closed.
+
+The captured A Sepal Stay diagnostic now parses as an exact AUD 1,584.17 guest
+total with a zero reconciliation difference.
+
+Install
+-------
+
+Open PowerShell and run:
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-airbnb-precise-total-hotfix42.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result: 241 passed.
+
+Then rerun the same Phase 12 A Sepal Stay portfolio command. The earlier
+PRICE_FAILED rows were not saved as completed state, so no --force flag is
+required.

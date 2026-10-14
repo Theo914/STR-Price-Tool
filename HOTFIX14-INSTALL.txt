@@ -1,0 +1,31 @@
+TravelStaytion parity tool — Hotfix 14
+Bounded Booking.com tax-disclosure diagnostic
+
+What this adds
+--------------
+The room-table diagnostic found an exact EUR 2,201.20 total, but Booking says
+that it includes taxes and charges without giving their amount. That is not yet
+a valid comparable price. Hotfix 14 captures only bounded public tax/charge
+attributes and hover disclosures. It still cannot emit a Booking priced result.
+
+Install (PowerShell)
+--------------------
+Keep the existing folder name and virtual environment.
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-v5-hotfix14.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\parity-tool-phase4-verify-v5" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\parity-tool-phase4-verify-v5"
+
+Run the offline test suite
+--------------------------
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected for Theo's incremental Windows installation:
+
+  105 passed
+
+Stop after the test suite and send the complete final line. Do not repeat the
+Booking pricing command until the installation result has been reviewed.

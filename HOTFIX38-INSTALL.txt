@@ -1,0 +1,90 @@
+PARITY TOOL — PHASE 10 / HOTFIX 38
+=================================
+
+What this adds
+--------------
+1. One enforced currency across TravelStaytion and the selected OTA.
+   Currency values must be explicit three-letter codes such as EUR or GBP.
+   A returned quote or component in another currency blocks the comparison.
+
+2. Evidence-graded price breakdowns.
+   A breakdown is marked "exact" only when every component has an explicit
+   currency and displayed-total inclusion flag, and the included components
+   reconcile to the guest-visible total. Otherwise the guest total remains
+   visible and the component breakdown is marked unavailable.
+
+3. Airbnb rendered-currency verification.
+   The requested currency is no longer assumed to be the displayed currency.
+
+4. Clear date-specific minimum-stay evidence.
+   Output distinguishes the TravelStaytion minimum for the selected check-in,
+   an exact OTA minimum when exposed, and an OTA that merely accepts the final
+   comparison duration.
+
+Install
+-------
+Run in PowerShell:
+
+  Expand-Archive `
+    -Path "$env:USERPROFILE\Downloads\parity-tool-phase10-currency-breakdown-hotfix38.zip" `
+    -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+    -Force
+
+  cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+  .\.venv\Scripts\python.exe -m pytest -q
+
+Expected Windows result: 230 passed.
+
+Offline Airbnb acceptance proof
+--------------------------------
+This reuses the Hotfix 37 live fixtures and performs no network requests:
+
+  .\.venv\Scripts\python.exe -m parity.cli quote `
+    "https://www.travelstaytion.com/stay/1013419" `
+    --channel airbnb `
+    --candidate-url "https://www.airbnb.com.au/rooms/1506734032830000497" `
+    --db ".\.parity\uk-no-licence.db" `
+    --checkin 2027-02-01 `
+    --checkout 2027-02-04 `
+    --guests 2 `
+    --currency EUR `
+    --offline `
+    --fixtures-dir ".parity/airbnb-hoxton-hotfix37-minstay-fixtures" `
+    --governor-db ".parity/airbnb-hoxton-hotfix38-offline-governor.db" `
+    --format json `
+    --output "quote-1013419-airbnb-hotfix38-offline.json"
+
+Expected core result:
+  guest total EUR 742.26; exact price breakdown reconciled
+  TravelStaytion guest total EUR 796.84
+  Airbnb guest total EUR 742.26
+  Airbnb cheaper by EUR 54.58 (6.85%)
+
+Offline Booking acceptance proof
+--------------------------------
+Run only after the Airbnb replay succeeds:
+
+  .\.venv\Scripts\python.exe -m parity.cli quote `
+    "https://www.travelstaytion.com/stay/1068655" `
+    --channel booking `
+    --candidate-url "https://www.booking.com/hotel/gb/modern-3br-apartment-central-location-sleeps-6.en-gb.html" `
+    --db ".\.parity\booking-brighton-modern-3br.db" `
+    --checkin 2027-05-17 `
+    --checkout 2027-05-27 `
+    --guests 2 `
+    --currency GBP `
+    --offline `
+    --fixtures-dir ".parity/booking-brighton-modern-3br-hotfix37-minstay-fixtures" `
+    --governor-db ".parity/booking-brighton-modern-3br-hotfix38-offline-governor.db" `
+    --format json `
+    --output "quote-1068655-booking-hotfix38-offline.json"
+
+Expected core result:
+  guest total GBP 5270.00; exact price breakdown reconciled
+  TravelStaytion guest total GBP 3863.00
+  Booking guest total GBP 5270.00
+  Booking more expensive by GBP 1407.00 (36.42%)
+
+Do not make another live request for these proofs. Stop and report any output
+that differs from the expected result.

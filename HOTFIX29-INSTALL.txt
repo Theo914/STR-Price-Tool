@@ -1,0 +1,35 @@
+TravelStaytion parity tool — Hotfix 29
+======================================
+
+Purpose
+-------
+Automatic-date quotes now retain the successful TravelStaytion quote and
+compare it with the competitor quote. The comparison is fail-closed unless
+check-in, checkout, guest count, currency and refundability align.
+
+The JSON report keeps the existing `price` field for the competitor and adds:
+
+- `subject_price`: the TravelStaytion quote used to select the dates;
+- `comparison`: signed candidate-versus-TravelStaytion difference, percentage,
+  lower-price site and verdict.
+
+TravelStaytion's live `availabilityError` message is also preserved instead of
+being replaced by a generic unavailable note.
+
+Install
+-------
+Expand this ZIP over the existing travelstaytion-parity-tool directory with
+PowerShell's Expand-Archive -Force command.
+
+Verification
+------------
+Run:
+
+    .\.venv\Scripts\python.exe -m pytest -q
+
+Expected result on Theo's Windows machine:
+
+    202 passed
+
+Stop after the tests and return the complete result before making another live
+pricing request.

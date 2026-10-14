@@ -1,0 +1,60 @@
+TravelStaytion parity tool - ID-first compact app / Hotfix 45
+============================================================
+
+What this adds
+--------------
+
+- Enter a bare TravelStaytion ID such as 1069699.
+- Single check and Up to 10 modes.
+- One button runs discovery, identity verification and pricing.
+- Airbnb and Booking.com candidate discovery.
+- Only VERIFIED matches are priced.
+- A likely but unverified OTA link is shown without a price.
+- A listing is still shown when only one OTA is found and verified.
+- Automatic same-currency and common-minimum-stay comparison.
+- Shorter 540 x 760 interface.
+- Restrained TravelStaytion, Airbnb and Booking.com accent colours.
+- Red means the OTA is cheaper than TravelStaytion; green means it is dearer.
+- Localhost-only launcher with a per-launch request token.
+
+Install
+-------
+
+Open PowerShell and run:
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-id-first-app-hotfix45.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result: 268 passed.
+
+Launch the app
+--------------
+
+.\.venv\Scripts\python.exe -m parity.cli app
+
+Microsoft Edge should open the compact Parity Desk window. Keep PowerShell
+open while using it. Enter 1069699 in Single check, leave Currency as Auto,
+then click "Find, verify and compare".
+
+For several listings, choose "Up to 10" and enter one TravelStaytion ID per
+line. Duplicate IDs are removed automatically. More than ten is rejected.
+
+When finished, close the window and press Ctrl+C in PowerShell to stop the
+local app.
+
+Important evidence rule
+-----------------------
+
+Booking and Airbnb search results are candidates, not proof. The app prices a
+candidate only after the existing licence/photo identity gate returns VERIFIED.
+Unverified candidates remain visible but cannot affect the price comparison.
+
+The new Booking public-search discovery path still needs its first governed
+Windows live proof. If it finds no candidate or returns an unverified candidate,
+that is a visible result rather than permission to guess.

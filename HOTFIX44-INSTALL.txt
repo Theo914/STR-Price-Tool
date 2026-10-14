@@ -1,0 +1,46 @@
+TravelStaytion parity tool - compact dashboard / Hotfix 44
+=========================================================
+
+What this adds
+--------------
+
+Hotfix 44 adds the first Phase 13 interface. It converts a saved portfolio
+results file and its quote reports into one self-contained HTML dashboard.
+
+The dashboard includes:
+
+- a selector for up to ten listings;
+- TravelStaytion guest total at the top;
+- Booking.com and Airbnb guest totals below it;
+- absolute and percentage differences from TravelStaytion;
+- direct listing links;
+- exact captured price components only when a reconciled breakdown exists;
+- precomputed Airbnb 10% and Booking 10/15/20 what-if scenarios;
+- clear unavailable, failed and review-required states;
+- a compact 540 x 900 Microsoft Edge app-window option on Windows.
+
+The HTML has no remote scripts, fonts, images or analytics. It reads saved
+evidence and does not make pricing requests.
+
+Install
+-------
+
+Open PowerShell and run:
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-compact-dashboard-hotfix44.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result: 248 passed.
+
+Create and open the compact Phase 12 proof dashboard:
+
+.\.venv\Scripts\python.exe -m parity.cli dashboard `
+  ".\phase12-a-sepal-offline-results.json" `
+  --output "phase13-parity-dashboard.html" `
+  --compact

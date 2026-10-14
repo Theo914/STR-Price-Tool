@@ -1,0 +1,38 @@
+{
+  "host": "Phase 12 proof host",
+  "defaults": {
+    "guests": 2
+  },
+  "listings": [
+    {
+      "name": "Hoxton",
+      "subject": "https://www.travelstaytion.com/stay/1013419",
+      "currency": "EUR",
+      "checkin": "2027-02-01",
+      "checkout": "2027-02-04",
+      "channels": [
+        {
+          "channel": "airbnb",
+          "candidate_url": "https://www.airbnb.com.au/rooms/1506734032830000497",
+          "db": ".parity/uk-no-licence.db",
+          "fixtures_dir": ".parity/airbnb-hoxton-hotfix37-minstay-fixtures"
+        }
+      ]
+    },
+    {
+      "name": "Brighton Modern 3BR",
+      "subject": "https://www.travelstaytion.com/stay/1068655",
+      "currency": "GBP",
+      "checkin": "2027-05-17",
+      "checkout": "2027-05-27",
+      "channels": [
+        {
+          "channel": "booking",
+          "candidate_url": "https://www.booking.com/hotel/gb/modern-3br-apartment-central-location-sleeps-6.en-gb.html",
+          "db": ".parity/booking-brighton-modern-3br.db",
+          "fixtures_dir": ".parity/booking-brighton-modern-3br-hotfix37-minstay-fixtures"
+        }
+      ]
+    }
+  ]
+}

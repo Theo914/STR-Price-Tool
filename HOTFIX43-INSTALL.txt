@@ -1,0 +1,39 @@
+TravelStaytion parity tool - Booking air-conditioning fee / Hotfix 43
+====================================================================
+
+What this fixes
+---------------
+
+Booking can expose an explicitly itemised "Air conditioning fee" as a
+mandatory component included in the displayed guest total. The A Sepal Stay
+capture contained:
+
+- AUD 1,292 accommodation;
+- AUD 249 cleaning fee;
+- AUD 59 air conditioning fee;
+- AUD 48 government tax;
+- AUD 1,648 displayed total.
+
+The four components reconcile exactly to the displayed total. Hotfix 43
+classifies only the named air-conditioning fee as an included mandatory fee.
+Unknown fee labels remain blocked, and all existing inclusion, currency and
+arithmetic checks remain unchanged.
+
+Install
+-------
+
+Open PowerShell and run:
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-booking-aircon-fee-hotfix43.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result: 242 passed.
+
+Then rerun the same Phase 12 A Sepal Stay portfolio command. The failed rows
+were not saved as completed state, so no --force flag is required.

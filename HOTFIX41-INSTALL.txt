@@ -1,0 +1,41 @@
+TravelStaytion parity tool - Phase 12 shared stay / Hotfix 41
+============================================================
+
+What this adds
+--------------
+
+- One automatic date and minimum-stay selector shared by TravelStaytion,
+  Airbnb and Booking.com.
+- Uses the longest exact minimum exposed by any of the three sites.
+- Re-prices every site whenever the stay length is raised.
+- Moves the whole group to the next weekly window if any site is unavailable.
+- Refuses uncertain errors and unnumbered minimum-stay messages.
+- Emits both OTA comparisons only for identical dates, guests and AUD currency.
+- Keeps the existing tamper-resistant, zero-network portfolio resume behaviour.
+- Adds the A Sepal Stay three-channel proof configuration.
+
+Install
+-------
+
+Open PowerShell and run:
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-phase12-shared-stay-hotfix41.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result: 240 passed.
+
+Important
+---------
+
+Do not run the portfolio price check until both identity verification commands
+have returned RESULT VERIFIED and saved their mappings in:
+
+.parity\a-sepal-stay.db
+
+The Airbnb tracking query has deliberately been removed from the stable URL.

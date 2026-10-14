@@ -1,0 +1,35 @@
+PHASE 8 HOTFIX 21 — MARRIOTT IDENTITY FOUNDATION
+===============================================
+
+This patch replaces the unsafe Marriott prototype with an offline-first
+identity boundary:
+
+- canonical numeric Homes & Villas property URLs;
+- one governed listing navigation per run;
+- persistent challenge cooldown with no retry;
+- bounded structured identity snapshots;
+- exact-registration or deduplicated-photo verification;
+- browser-free offline replay;
+- explicit removal and locking of the old visible-text pricing fallback.
+
+No Marriott request is authorised by the installation step.
+
+Install in PowerShell
+---------------------
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-phase8-hotfix21.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result
+---------------
+
+173 passed
+
+STOP after the test run and send the complete result. Do not make a Marriott
+request today. Vrbo remains under its existing cooldown.

@@ -1,0 +1,29 @@
+{
+  "host": "Phase 12 three-channel proof",
+  "defaults": {
+    "guests": 2,
+    "target_lead_days": 120,
+    "auto_date_search_weeks": 8,
+    "minimum_stay_max_adjustments": 4
+  },
+  "listings": [
+    {
+      "name": "A Sepal Stay",
+      "subject": "https://www.travelstaytion.com/stay/1018084",
+      "currency": "AUD",
+      "auto_minimum_stay": true,
+      "channels": [
+        {
+          "channel": "airbnb",
+          "candidate_url": "https://www.airbnb.co.uk/rooms/1676081196282726495",
+          "db": ".parity/a-sepal-stay.db"
+        },
+        {
+          "channel": "booking",
+          "candidate_url": "https://www.booking.com/hotel/au/quiet-amp-comfortable-a-sepal-stay.en-gb.html",
+          "db": ".parity/a-sepal-stay.db"
+        }
+      ]
+    }
+  ]
+}

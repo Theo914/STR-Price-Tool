@@ -1,0 +1,85 @@
+TravelStaytion parity tool - Phase 11 / Hotfix 39
+=================================================
+
+What this adds
+--------------
+
+The quote report now includes discreet, non-bookable what-if discount calculations:
+
+- Airbnb: 10%
+- Booking.com: 10%, 15% and 20%
+
+Safety rules
+------------
+
+- A calculator is available only when the captured OTA price breakdown is exact and reconciled.
+- The hypothetical percentage is applied to the captured accommodation component.
+- Fixed cleaning fees and other fixed fees are not discounted.
+- A tax is reduced only when its captured label explicitly states a percentage rate.
+- An equivalent discount already present in the captured price is not stacked again.
+- Every result is labelled hypothetical and not bookable.
+- The adjusted OTA total is compared with the aligned TravelStaytion guest total in the same currency.
+
+Install
+-------
+
+Open PowerShell and run:
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-phase11-discounts-hotfix39.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result: 234 passed.
+
+Acceptance proof 1 - Airbnb
+---------------------------
+
+.\.venv\Scripts\python.exe -m parity.cli quote `
+  "https://www.travelstaytion.com/stay/1013419" `
+  --channel airbnb `
+  --candidate-url "https://www.airbnb.com.au/rooms/1506734032830000497" `
+  --db ".\.parity\uk-no-licence.db" `
+  --checkin 2027-02-01 `
+  --checkout 2027-02-04 `
+  --guests 2 `
+  --currency EUR `
+  --offline `
+  --fixtures-dir ".parity/airbnb-hoxton-hotfix37-minstay-fixtures" `
+  --governor-db ".parity/airbnb-hoxton-hotfix39-offline-governor.db" `
+  --format json `
+  --output "quote-1013419-airbnb-hotfix39-offline.json"
+
+Expected what-if line:
+
+[parity]     10%: EUR 666.06 guest total; additional discount EUR 76.20
+
+Acceptance proof 2 - Booking.com
+--------------------------------
+
+.\.venv\Scripts\python.exe -m parity.cli quote `
+  "https://www.travelstaytion.com/stay/1068655" `
+  --channel booking `
+  --candidate-url "https://www.booking.com/hotel/gb/modern-3br-apartment-central-location-sleeps-6.en-gb.html" `
+  --db ".\.parity\booking-brighton-modern-3br.db" `
+  --checkin 2027-05-17 `
+  --checkout 2027-05-27 `
+  --guests 2 `
+  --currency GBP `
+  --offline `
+  --fixtures-dir ".parity/booking-brighton-modern-3br-hotfix37-minstay-fixtures" `
+  --governor-db ".parity/booking-brighton-modern-3br-hotfix39-offline-governor.db" `
+  --format json `
+  --output "quote-1068655-booking-hotfix39-offline.json"
+
+Expected what-if lines:
+
+[parity]     10%: GBP 4853.00 guest total; additional discount GBP 417.00
+[parity]     15%: GBP 4644.50 guest total; additional discount GBP 625.50
+[parity]     20%: GBP 4436.00 guest total; additional discount GBP 834.00
+
+The JSON output also records the adjusted difference from TravelStaytion and the adjusted percentage difference for each scenario.

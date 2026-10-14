@@ -1,0 +1,76 @@
+PARITY TOOL HOTFIX 37 — COMMON MINIMUM-STAY SELECTION
+=====================================================
+
+What this adds
+--------------
+
+- New `quote --auto-minimum-stay` mode for TravelStaytion versus Airbnb or
+  Booking.com.
+- Reads TravelStaytion's public date-level calendar restriction before
+  pricing, so a generic quote error does not force a guessed stay length.
+- Starts from the exact TravelStaytion restriction, then raises the stay only
+  when the verified OTA explicitly requires more nights.
+- Produces one final aligned comparison at the shortest stay accepted by both
+  channels. It does not generate separate 4/7/14/28-night comparisons.
+- Keeps the existing 30-day live-date guard, exact guests, exact dates and
+  same-currency comparison checks.
+- Records the chosen minimum and every bounded discovery probe in JSON.
+- Rejects unnumbered minimum-stay evidence rather than inventing a number.
+
+Install
+-------
+
+From PowerShell:
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-minimum-stay-hotfix37.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result: 220 passed.
+
+First controlled live proof
+---------------------------
+
+The saved Brighton calendar evidence showed a 10-night minimum on the May
+2027 check-in dates. This command asks the new mode to rediscover the current
+restriction and compare only the shortest stay accepted by both sites:
+
+.\.venv\Scripts\python.exe -m parity.cli quote `
+  "https://www.travelstaytion.com/stay/1068655" `
+  --channel booking `
+  --candidate-url "https://www.booking.com/hotel/gb/modern-3br-apartment-central-location-sleeps-6.en-gb.html" `
+  --db ".\.parity\booking-brighton-modern-3br.db" `
+  --auto-minimum-stay `
+  --target-lead-days 210 `
+  --auto-date-search-weeks 1 `
+  --minimum-stay-max-adjustments 3 `
+  --guests 2 `
+  --currency GBP `
+  --travelstaytion-page-budget 1 `
+  --travelstaytion-pricing-budget 3 `
+  --booking-pricing-budget 2 `
+  --enable-booking-pricing-capture `
+  --record-fixtures `
+  --fixtures-dir ".parity/booking-brighton-modern-3br-hotfix37-minstay-fixtures" `
+  --governor-db ".parity/booking-brighton-modern-3br-hotfix37-minstay-governor.db" `
+  --format json `
+  --output "quote-1068655-booking-hotfix37-minstay.json"
+
+Expected behaviour
+------------------
+
+- The console first reports the TravelStaytion calendar minimum.
+- Only the resulting minimum-length stay is priced on both channels.
+- If Booking explicitly requires more nights, both channels are re-priced for
+  that higher common minimum.
+- A successful output includes `minimum_stay_nights` at report level and
+  `candidate.extra.date_policy.mode = automatic_minimum_stay`.
+- Generic unavailability remains unavailable; it is never reclassified as a
+  minimum-stay restriction.
+
+Do not repeat a successful live proof. Save its fixtures for offline replay.

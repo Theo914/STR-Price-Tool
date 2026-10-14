@@ -1,0 +1,3 @@
+listing_id,ts_url,title,host_id,host_email,town,country,lat,lng,licence,bedrooms,sleeps,currency,notes
+993365,https://www.travelstaytion.com/stay/993365,Villa Marina Di Porto-Vecchio,,,Porto-Vecchio,FR,41.61451845163858,9.288850638045748,2A247000614B3,4,8,EUR,fingerprint refreshed via playwright 2026-09-04
+319567,https://www.travelstaytion.com/stay/319567,Casetta Borsa by Wonderful Italy,,,Palermo,IT,38.11623298015202,13.365377040409266,19082053C241984,1,2,EUR,fingerprint refreshed via playwright 2026-09-14 (lat/lng shifted slightly from 2026-09-04 capture, ~150m, likely map-pin refinement; title/town/bedrooms/sleeps/licence unchanged; nationalIdentificationCode IT082053C2UUYPDYCD also present on page)

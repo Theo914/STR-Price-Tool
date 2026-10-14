@@ -1,0 +1,58 @@
+TravelStaytion parity tool - independent multi-candidate discovery / Hotfix 47
+=============================================================================
+
+What this fixes
+---------------
+
+- A never-before-seen TravelStaytion ID now gets up to four fresh Booking
+  searches built from its current title, city, country, postcode and published
+  registration identifier.
+- Results from those searches are deduplicated and ranked.
+- The identity gate now checks ranked candidates until one is VERIFIED for
+  each OTA. It stops at the first proof to control requests.
+- A likely first result no longer prevents a lower-ranked proven result from
+  being used.
+- Old local evidence is only a small cache signal. It cannot outrank a strong
+  fresh exact-title result merely because it was seen before.
+- Pricing remains fail-closed. Probable, insufficient, rejected and unchecked
+  candidates are never priced.
+- Up to five unverified OTA links remain available for manual review, now with
+  their identity status.
+- Clear, New check/back, Copy, CSV/JSON export and the dark forest-green
+  TravelStaytion interface from Hotfix 46 remain included.
+
+Install
+-------
+
+Open PowerShell and run:
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-independent-discovery-hotfix47.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\travelstaytion-parity-tool" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\travelstaytion-parity-tool"
+
+Test
+----
+
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected result: 279 passed.
+
+Launch
+------
+
+.\.venv\Scripts\python.exe -m parity.cli app
+
+Enter one TravelStaytion ID, or choose "Up to 10" and paste one ID per line.
+Keep PowerShell open while using the app. Close the app window and press
+Ctrl+C in PowerShell when finished.
+
+Acceptance rule
+---------------
+
+The local suite proves the discovery, multi-candidate, fail-closed, replay,
+portfolio and UI logic. It does not prove that Booking or Airbnb returned a
+live match on your machine. Treat a result as live proof only when the app has
+captured and verified that OTA page during the run.

@@ -1,0 +1,46 @@
+TravelStaytion parity tool — Hotfix 12
+Booking.com pricing foundation (offline first)
+
+What this adds
+--------------
+Hotfix 12 adds the strict Booking.com pricing parser, exact offline replay and
+the Booking quote CLI route. It does NOT authorise a live Booking price test.
+
+The tool now rejects unknown charges, ambiguous deposits, missing currencies,
+missing itemisation and totals that do not reconcile. An ordinary live Booking
+quote is locked before any browser or network request.
+
+Install (PowerShell)
+--------------------
+Keep using the existing folder for this checkpoint. Do not rename or move its
+.venv yet.
+
+Expand-Archive `
+  -Path "$env:USERPROFILE\Downloads\parity-tool-v5-hotfix12.zip" `
+  -DestinationPath "$env:USERPROFILE\Downloads\parity-tool-phase4-verify-v5" `
+  -Force
+
+cd "$env:USERPROFILE\Downloads\parity-tool-phase4-verify-v5"
+
+Run the offline test suite
+--------------------------
+.\.venv\Scripts\python.exe -m pytest -q
+
+Expected when installed over Theo's Hotfix 11 Windows folder:
+
+  103 passed
+
+The complete development archive contains eight additional historical tests
+and reports 111 passed. The Hotfix 12 overlay adds the same 15 new pricing
+foundation tests to the 88-test Windows installation.
+
+Stop after the tests and send the complete final line. Do not run a Booking.com
+quote yet. The first live pricing command will be chosen only after this local
+foundation passes and we confirm exact available dates manually.
+
+About the old folder name
+-------------------------
+The phase4 folder name is only cosmetic. Renaming a folder that contains the
+current .venv can break absolute paths inside the environment. We will move to
+a clean, correctly named folder when we rebuild the environment at a safe
+checkpoint; Hotfix 12 should still be installed over the current folder.
