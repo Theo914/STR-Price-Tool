@@ -78,7 +78,7 @@ class AirbnbMapProvider:
         initial_radius_km: float = 0.4,
         expanded_radius_km: float = 1.5,
         minimum_candidates: int = 12,
-        max_pages_per_radius: int = 2,
+        max_pages_per_radius: int = 4,
         photo_hash_cache=None,
         outer_radius_km: float | None = 4.0,
         prescreen_limit: int = 25,

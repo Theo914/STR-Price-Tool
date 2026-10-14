@@ -494,6 +494,42 @@ def _diagnostic_booking_rate(
     )
 
 
+def booking_rate_options(rates: list[dict], selected: dict | None) -> list[dict]:
+    """All distinct rates on the page, cheapest first, selected one marked.
+
+    The comparison uses the like-for-like refundable rate when one exists,
+    but a cheaper non-refundable rate is real information for the operator
+    (e.g. 337856: EUR 1,334 non-refundable vs EUR 1,460 free cancellation).
+    """
+    options: list[dict] = []
+    seen: set[tuple] = set()
+    for rate in rates:
+        if not isinstance(rate, dict):
+            continue
+        total = _embedded_booking_amount(rate.get("total"))
+        if total is None:
+            continue
+        terms = str(rate.get("cancellation_type") or "").strip()
+        lowered = terms.casefold().replace("-", "_")
+        if "free_cancellation" in lowered or "free cancellation" in lowered:
+            label = "Free cancellation"
+        elif "non_refundable" in lowered or "non refundable" in lowered:
+            label = "Non-refundable"
+        else:
+            label = terms.replace("_", " ").capitalize() or "Terms not shown"
+        key = (round(total, 2), label)
+        if key in seen:
+            continue
+        seen.add(key)
+        options.append({
+            "total": round(total, 2),
+            "cancellation": label,
+            "selected": rate is selected,
+        })
+    options.sort(key=lambda item: item["total"])
+    return options[:8]
+
+
 def parse_booking_pricing_snapshot(
     ref: PropertyRef,
     snapshot: dict,
@@ -687,7 +723,26 @@ def parse_booking_pricing_snapshot(
         cancellation_type=cancellation_type,
         source_url=source_url,
         notes="Booking structured rate arithmetic reconciled from explicit component lines",
+        rate_options=_valid_rate_options(snapshot.get("rate_options")),
     )
+
+
+def _valid_rate_options(value) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    options = []
+    for item in value[:8]:
+        if not isinstance(item, dict):
+            continue
+        total = item.get("total")
+        if isinstance(total, bool) or not isinstance(total, (int, float)):
+            continue
+        options.append({
+            "total": round(float(total), 2),
+            "cancellation": str(item.get("cancellation") or "")[:60],
+            "selected": item.get("selected") is True,
+        })
+    return options
 
 
 def _as_float(value) -> float | None:
@@ -1571,6 +1626,7 @@ def _capture_booking_pricing_snapshot(
         "line_items": structured_line_items if structured_total is not None else [],
         "refundable": structured_refundable,
         "cancellation_type": structured_cancellation,
+        "rate_options": booking_rate_options(structured_rates, selected_rate),
         "evidence_source": (
             "embedded_public_booking_price_breakdown"
             if structured_total is not None

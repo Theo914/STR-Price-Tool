@@ -1154,3 +1154,34 @@ def test_rounded_row_total_collision_remains_ambiguous(ref):
     assert snapshot["outcome"] == "unknown"
     assert snapshot["displayed_total"] is None
     assert snapshot["diagnostics"]["structured_flexible_rate_count"] == 0
+
+
+def test_all_booking_rates_are_kept_with_the_compared_one_marked():
+    """337856, 30 Nov-3 Dec 2026: EUR 1,334 non-refundable and EUR 1,460
+    free cancellation were both on the page; only one was being reported."""
+    from parity.adapters.browser.booking import booking_rate_options
+
+    non_refundable = {"total": 1334.0, "cancellation_type": "non_refundable", "block_id": "a"}
+    flexible = {"total": 1459.97, "cancellation_type": "free_cancellation", "block_id": "b"}
+    options = booking_rate_options([flexible, non_refundable, dict(flexible)], flexible)
+
+    assert options == [
+        {"total": 1334.0, "cancellation": "Non-refundable", "selected": False},
+        {"total": 1459.97, "cancellation": "Free cancellation", "selected": True},
+    ]
+
+
+def test_dashboard_price_view_carries_other_rates():
+    from parity.dashboard import _price_view
+
+    view = _price_view({
+        "outcome": "priced",
+        "headline_total": 1459.97,
+        "rate_options": [
+            {"total": 1334.0, "cancellation": "Non-refundable", "selected": False},
+            {"total": "bad", "cancellation": "x"},
+        ],
+    })
+    assert view["rate_options"] == [
+        {"total": 1334.0, "cancellation": "Non-refundable", "selected": False}
+    ]

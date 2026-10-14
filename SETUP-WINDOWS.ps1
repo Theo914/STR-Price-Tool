@@ -24,5 +24,5 @@ if ($LASTEXITCODE -ne 0) { throw "The regression suite failed." }
 
 Write-Host ""
 Write-Host "Setup complete. Run .\RUN-APP.ps1 to launch Parity Desk."
-Write-Host "Expected regression result: 369 passed."
+Write-Host "Expected regression result: 372 passed."
 

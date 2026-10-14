@@ -132,11 +132,13 @@ def _iter_search_results(
     amenity_ids: list[str] | None = None,
     trace: AirbnbSearchTrace | None = None,
     search_origin: str = "https://www.airbnb.com",
+    extra_params: dict | None = None,
 ):
     """Yields raw Airbnb search-result dicts across all pages."""
     trace = trace or AirbnbSearchTrace(radius_km=max_distance_km)
     trace.search_origin = search_origin.rstrip("/")
     cursor = None
+    page_index = 0
     delta = max_distance_km / 111.0  # km -> degrees of latitude
     # A degree of longitude shrinks with latitude; without this a 3 km box at
     # London (52N) only reached ~1.85 km east-west.
@@ -152,6 +154,8 @@ def _iter_search_results(
     }
     if amenity_ids:
         params_base["amenities[]"] = amenity_ids
+    if extra_params:
+        params_base.update(extra_params)
     for _ in range(max_pages):
         params = dict(params_base)
         if cursor:
@@ -243,11 +247,15 @@ def _iter_search_results(
             trace.raw_results += 1
             yield r
 
+        # pageCursors lists a cursor for every page (page 1 first); the next
+        # page is the one after the current page, not always index 1, which
+        # silently stopped every search after two pages.
         cursors = _find_key(state, "pageCursors")
-        if not cursors or len(cursors) < 2:
+        page_index += 1
+        if not isinstance(cursors, list) or page_index >= len(cursors):
             trace.stop_reason = "last_page"
             return
-        next_cursor = cursors[1]
+        next_cursor = cursors[page_index]
         if not next_cursor or next_cursor == cursor:
             trace.stop_reason = "last_page"
             return

@@ -374,3 +374,27 @@ def test_booking_search_snapshot_keeps_only_canonical_property_urls():
         "https://www.booking.com/hotel/es/villa-sa-planeta.en-gb.html"
     )
     assert refs[0].title == "Villa Sa Planeta"
+
+
+def test_airbnb_search_walks_every_page_cursor_not_just_the_second():
+    """pageCursors lists one cursor per page; the loop used cursors[1] every
+    time, so every search silently stopped after two pages (live, Paris)."""
+    cursors = ["c0", "c1", "c2", "c3"]
+    seen_cursors = []
+
+    def handler(request):
+        cursor = request.url.params.get("cursor")
+        seen_cursors.append(cursor)
+        page = cursors.index(cursor) if cursor else 0
+        state = {
+            "searchResults": [{"listing": {"id": f"{page}{i}"}} for i in range(3)],
+            "paginationInfo": {"pageCursors": cursors},
+        }
+        return httpx.Response(200, text=f'<script id="data-deferred-state-0">{json.dumps(state)}</script>')
+
+    trace = AirbnbSearchTrace(radius_km=1)
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        results = list(_iter_search_results(client, 48.85, 2.34, 1, max_pages=10, trace=trace))
+    assert seen_cursors == [None, "c1", "c2", "c3"]
+    assert len(results) == 12
+    assert trace.stop_reason == "last_page"

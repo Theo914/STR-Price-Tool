@@ -120,6 +120,9 @@ class PriceResult:
     breakdown_note: Optional[str] = None
     source_url: Optional[str] = None
     notes: Optional[str] = None                # why blank / what went wrong
+    # Every rate the channel offered for the same stay (total + terms); the
+    # compared rate is marked "selected".  Informational only.
+    rate_options: list[dict] = field(default_factory=list)
     checked_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def is_priced(self) -> bool:
