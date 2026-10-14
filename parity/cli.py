@@ -2085,7 +2085,9 @@ def main(argv: list[str] | None = None) -> int:
         default="AUTO",
         help="AUTO infers the local listing currency; a three-letter override is allowed",
     )
-    p_auto.add_argument("--target-lead-days", type=int, default=120)
+    # Many hosts open their OTA calendars only ~3 months ahead; 45 days sits
+    # inside that horizon while keeping the 30-day minimum lead.
+    p_auto.add_argument("--target-lead-days", type=int, default=45)
     p_auto.add_argument("--auto-date-search-weeks", type=int, default=8)
     p_auto.add_argument("--minimum-stay-max-adjustments", type=int, default=4)
     p_auto.add_argument("--limit-per-site", type=int, default=5)
