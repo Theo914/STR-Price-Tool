@@ -299,3 +299,15 @@ def test_duckduckgo_duck_challenge_is_recognised_as_a_block():
     provider.discover(subject)
     assert (provider.outcomes[0].engine, provider.outcomes[0].status) == ("duckduckgo", "challenge")
     assert all(o.engine != "duckduckgo" for o in provider.outcomes[1:])
+
+
+def test_already_matched_channel_is_not_searched_again():
+    subject = _subject(registration_ids=["ET-0123-E"])
+    session = _FakeSession({})
+    provider = WebLicenceSearchProvider(session, engines=("bing",), skip_sites={"airbnb"})
+    provider.discover(subject)
+    searched = [outcome.query for outcome in provider.outcomes]
+    assert searched
+    assert not any("site:airbnb.com" in query for query in searched)
+    # The unrestricted licence search still runs for the missing channel.
+    assert '"ET-0123-E"' in searched

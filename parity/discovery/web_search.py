@@ -258,6 +258,7 @@ class WebLicenceSearchProvider:
         pause_seconds: float = 2.5,
         sleep: Callable[[float], None] = time.sleep,
         notify: Callable[[str], None] | None = None,
+        skip_sites: set[str] | frozenset[str] = frozenset(),
     ):
         self.session = session
         self.engines = engines
@@ -268,6 +269,8 @@ class WebLicenceSearchProvider:
         self.pause_seconds = pause_seconds
         self.sleep = sleep
         self.notify = notify or (lambda message: None)
+        # Channels already matched elsewhere; their queries are not run.
+        self.skip_sites = set(skip_sites)
         self.outcomes: list[QueryOutcome] = []
 
     # -- page access -------------------------------------------------------
@@ -363,7 +366,9 @@ class WebLicenceSearchProvider:
     # -- discovery ---------------------------------------------------------
 
     def discover(self, subject: PropertyRef) -> ProviderDiscoveryResult:
-        queries = build_web_queries(subject)[: self.max_queries]
+        queries = [
+            query for query in build_web_queries(subject) if query.target not in self.skip_sites
+        ][: self.max_queries]
         if not queries:
             return ProviderDiscoveryResult(
                 refs=[],
@@ -375,7 +380,7 @@ class WebLicenceSearchProvider:
         attempts = 0
 
         for query in queries:
-            sites_found = {ref.site for ref in found.values()}
+            sites_found = {ref.site for ref in found.values()} | self.skip_sites
             if self.stop_when_both_found and {"airbnb", "booking"} <= sites_found:
                 break
             # Title fallbacks only run for a channel licence search missed.

@@ -53,7 +53,10 @@ from parity.adapters.registry import resolve
 from parity.core.matching import (
     common_registration_ids,
     find_licence_numbers,
+    KEYPOINT_MIN_INLIERS,
+    keypoint_matching_available,
     match_photo_hashes,
+    match_photo_keypoints,
     phash_image,
     structural_conflicts,
 )
@@ -146,6 +149,24 @@ def _fetch_gallery_hashes(
     return hashes
 
 
+KEYPOINT_IMAGE_LIMIT = 12
+
+
+def _fetch_gallery_images(client: httpx.Client, gallery: list[str], limit: int = KEYPOINT_IMAGE_LIMIT) -> list[bytes]:
+    """Raw photo bytes for the keypoint fallback (not persisted)."""
+    images: list[bytes] = []
+    for url in gallery[:limit]:
+        try:
+            resp = client.get(url, timeout=15.0)
+            resp.raise_for_status()
+            images.append(resp.content)
+        except (OfflineFixtureError, RequestDeferred):
+            raise
+        except Exception as error:
+            _log(f"  keypoint photo download failed ({error}); skipping")
+    return images
+
+
 def identify_and_match(
     client: httpx.Client,
     subject_url: str,
@@ -170,6 +191,7 @@ def identify_and_match(
          f"{len(subject.gallery)} photos")
 
     subject_hashes = None
+    subject_images: list[bytes] | None = None
     matches: list[MatchResult] = []
     verified_sites: set[str] = set()
     manual_verifications = manual_verifications or {}
@@ -368,7 +390,30 @@ def identify_and_match(
             f"subject {len(subject_hashes)} -> {photo_summary.subject_unique} unique; "
             f"candidate {len(cand_hashes)} -> {photo_summary.candidate_unique} unique"
         )
-        if photo_summary.same_property:
+        keypoint_summary = None
+        if not photo_summary.same_property and keypoint_matching_available():
+            _log("  pHash inconclusive -- trying keypoint (ORB) photo matching")
+            if subject_images is None:
+                subject_images = _fetch_gallery_images(client, subject.gallery)
+            keypoint_summary = match_photo_keypoints(
+                subject_images, _fetch_gallery_images(client, cand_ref.gallery)
+            )
+            _log(f"  keypoint matching: {keypoint_summary.matching_pairs} one-to-one photo pair(s)")
+        if keypoint_summary is not None and keypoint_summary.same_property:
+            record(MatchResult(
+                ref=cand_ref,
+                decision=IdentityDecision.VERIFIED,
+                evidence=[IdentityEvidence(
+                    kind=IdentityEvidenceKind.PHOTO_MATCH,
+                    detail=(
+                        f"{keypoint_summary.matching_pairs} one-to-one photos matched by "
+                        f"keypoint geometry (>= {KEYPOINT_MIN_INLIERS} RANSAC inliers each); "
+                        f"pHash alone found {photo_summary.matching_pairs}"
+                    ),
+                    source_url=url,
+                )],
+            ))
+        elif photo_summary.same_property:
             record(MatchResult(
                 ref=cand_ref,
                 decision=IdentityDecision.VERIFIED,
@@ -384,9 +429,13 @@ def identify_and_match(
                 )],
             ))
         else:
+            best_pairs = max(
+                photo_summary.matching_pairs,
+                keypoint_summary.matching_pairs if keypoint_summary else 0,
+            )
             decision = (
                 IdentityDecision.PROBABLE_REVIEW_REQUIRED
-                if photo_summary.matching_pairs > 0 else IdentityDecision.INSUFFICIENT_EVIDENCE
+                if best_pairs > 0 else IdentityDecision.INSUFFICIENT_EVIDENCE
             )
             record(MatchResult(
                 ref=cand_ref,

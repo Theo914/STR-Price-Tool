@@ -277,3 +277,93 @@ def is_same_property(our_hashes: list[PHash], their_hashes: list[PHash]) -> tupl
     """
     summary = match_photo_hashes(our_hashes, their_hashes)
     return summary.same_property, summary.matching_pairs
+
+
+# ---- Keypoint fallback (ORB + RANSAC) --------------------------------------
+#
+# pHash compares whole-frame structure, so a photo that one channel crops,
+# letterboxes or watermarks can fall outside the bit threshold.  Keypoint
+# matching (the approach in Airbnb's cross-listing patent US11869106) counts
+# geometrically consistent local features instead.  Measured live on
+# TravelStaytion 337856: the same property scored 554-1259 inliers per photo,
+# a different nearby flat scored at most 11.
+
+KEYPOINT_MIN_INLIERS = 60
+KEYPOINT_MAX_SIDE = 800
+
+
+def keypoint_matching_available() -> bool:
+    try:
+        import cv2  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def keypoint_features(data: bytes):
+    """ORB keypoints/descriptors for one image, or None if undecodable."""
+    import cv2
+    import numpy as np
+
+    image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_GRAYSCALE)
+    if image is None:
+        return None
+    scale = KEYPOINT_MAX_SIDE / max(image.shape)
+    if scale < 1:
+        image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    keypoints, descriptors = cv2.ORB_create(nfeatures=1500).detectAndCompute(image, None)
+    if descriptors is None or len(keypoints) < 10:
+        return None
+    return keypoints, descriptors
+
+
+def keypoint_inliers(left, right) -> int:
+    """Ratio-tested ORB matches that agree on one homography."""
+    import cv2
+    import numpy as np
+
+    if left is None or right is None:
+        return 0
+    left_points, left_descriptors = left
+    right_points, right_descriptors = right
+    good = []
+    for pair in cv2.BFMatcher(cv2.NORM_HAMMING).knnMatch(left_descriptors, right_descriptors, k=2):
+        if len(pair) == 2 and pair[0].distance < 0.75 * pair[1].distance:
+            good.append(pair[0])
+    if len(good) < 8:
+        return 0
+    source = np.float32([left_points[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+    target = np.float32([right_points[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+    _, mask = cv2.findHomography(source, target, cv2.RANSAC, 5.0)
+    return int(mask.sum()) if mask is not None else 0
+
+
+def match_photo_keypoints(subject_images: list[bytes], candidate_images: list[bytes]) -> PhotoMatchSummary:
+    """One-to-one photo pairs with at least KEYPOINT_MIN_INLIERS inliers."""
+    subject = [f for f in (keypoint_features(item) for item in subject_images) if f is not None]
+    candidate = [f for f in (keypoint_features(item) for item in candidate_images) if f is not None]
+    scored = sorted(
+        (
+            (keypoint_inliers(left, right), i, j)
+            for i, left in enumerate(subject)
+            for j, right in enumerate(candidate)
+        ),
+        reverse=True,
+    )
+    used_subject: set[int] = set()
+    used_candidate: set[int] = set()
+    pairs = 0
+    for inliers, i, j in scored:
+        if inliers < KEYPOINT_MIN_INLIERS:
+            break
+        if i in used_subject or j in used_candidate:
+            continue
+        used_subject.add(i)
+        used_candidate.add(j)
+        pairs += 1
+    return PhotoMatchSummary(
+        same_property=pairs >= MIN_MATCHING_PHOTOS,
+        matching_pairs=pairs,
+        subject_unique=len(subject),
+        candidate_unique=len(candidate),
+    )

@@ -38,6 +38,7 @@ from parity.adapters.browser.booking import (
 )
 from parity.adapters.browser.expedia_group_pricing import canonical_platform_url
 from parity.core.models import (
+    DiscoveryReport,
     IdentityDecision,
     IdentityReport,
     ManualVerification,
@@ -876,7 +877,7 @@ def _cmd_discover(args: argparse.Namespace) -> int:
                     if not args.no_web_search:
                         providers.insert(1, WebLicenceSearchProvider(
                             browser_session,
-                            interactive=not args.headless,
+                            interactive=args.interactive_captcha and not args.headless,
                             notify=lambda message: print(message, file=sys.stderr),
                         ))
                     if "booking" in requested_channels:
@@ -926,6 +927,33 @@ def _channel_discovery_summary(discovery, channel: str) -> str:
     return f"No likely {channel} listing was found. " + "; ".join(parts)
 
 
+def _verify_ranked_candidates(
+    client, subject, subject_url, report, browser_session, hash_store, store
+):
+    """Identity-check ranked, not-yet-verified candidates; persist proofs."""
+    ranked = ranked_candidates_per_channel(report)
+    refs = [
+        candidate.ref
+        for channel in ("airbnb", "booking")
+        for candidate in ranked[channel]
+        if candidate.ref.extra.get("verified_mapping") is not True
+    ]
+    if not refs:
+        return []
+    _, matches = identify_and_match(
+        client=client,
+        subject_url=subject_url,
+        candidate_urls=[ref.url for ref in refs],
+        browser_session=browser_session,
+        photo_hash_cache=hash_store,
+        stop_after_verified_sites=True,
+    )
+    for match in matches:
+        if match.is_verified():
+            store.save_verified_mapping(subject, match)
+    return matches
+
+
 def _run_web_licence_search(args, subject, browser_session, known_sites, providers) -> set[str]:
     """Run licence-first web search once; return the channels it surfaced."""
     if getattr(args, "no_web_search", False) or browser_session is None:
@@ -934,7 +962,8 @@ def _run_web_licence_search(args, subject, browser_session, known_sites, provide
         return set()
     provider = WebLicenceSearchProvider(
         browser_session,
-        interactive=not args.headless,
+        interactive=bool(getattr(args, "interactive_captcha", False)) and not args.headless,
+        skip_sites=set(known_sites),
         notify=lambda message: print(message, file=sys.stderr),
     )
     print(
@@ -1049,14 +1078,11 @@ def _cmd_auto(args: argparse.Namespace) -> int:
                             file=sys.stderr,
                         )
                         providers.append(HistoricalEvidenceProvider(historical))
-                    web_sites = _run_web_licence_search(
-                        args, subject, browser_session, known_sites, providers
-                    )
-                    # Map/OTA-internal search is the fallback for any channel
-                    # the exact licence/title web search did not surface.
-                    if "airbnb" not in known_sites | web_sites:
+                    # Each channel's own map/search first: it needs no search
+                    # engine and works for listings nobody has checked before.
+                    if "airbnb" not in known_sites:
                         providers.append(AirbnbMapProvider(client))
-                    if "booking" not in known_sites | web_sites:
+                    if "booking" not in known_sites:
                         if subject.lat is not None and subject.lng is not None:
                             providers.append(BookingMapProvider(browser_session))
                         providers.append(BookingSearchProvider(browser_session))
@@ -1064,28 +1090,50 @@ def _cmd_auto(args: argparse.Namespace) -> int:
                         providers,
                         limit_per_site=args.limit_per_site,
                     ).discover(subject)
+                    matches = _verify_ranked_candidates(
+                        client, subject, subject_url, discovery, browser_session, hash_store, store
+                    )
+                    verified_sites = set(known_sites) | {
+                        match.ref.site for match in matches if match.is_verified()
+                    }
+                    # Web search is the last resort, only for unmatched channels.
+                    missing = {"airbnb", "booking"} - verified_sites
+                    if missing:
+                        web_providers: list = []
+                        _run_web_licence_search(
+                            args, subject, browser_session, verified_sites, web_providers
+                        )
+                        if web_providers:
+                            checked = {canonicalize_url(match.ref.url) for match in matches}
+                            web_report = DiscoveryEngine(
+                                web_providers, limit_per_site=args.limit_per_site
+                            ).discover(subject)
+                            discovery.provider_diagnostics.update(web_report.provider_diagnostics)
+                            discovery.provider_errors.update(web_report.provider_errors)
+                            known_urls = {canonicalize_url(c.ref.url) for c in discovery.candidates}
+                            additions = [
+                                candidate
+                                for candidate in web_report.candidates
+                                if candidate.ref.site in missing
+                                and canonicalize_url(candidate.ref.url) not in known_urls
+                                and canonicalize_url(candidate.ref.url) not in checked
+                            ]
+                            if additions:
+                                discovery.candidates.extend(additions)
+                                discovery.candidates.sort(
+                                    key=lambda item: (item.ref.site, -item.score, item.ref.url)
+                                )
+                                matches.extend(_verify_ranked_candidates(
+                                    client,
+                                    subject,
+                                    subject_url,
+                                    DiscoveryReport(subject=subject, candidates=additions),
+                                    browser_session,
+                                    hash_store,
+                                    store,
+                                ))
                     store.save_candidates(subject, discovery.candidates)
                     ranked = ranked_candidates_per_channel(discovery)
-                    new_candidates = []
-                    for channel in ("airbnb", "booking"):
-                        new_candidates.extend(
-                            candidate.ref
-                            for candidate in ranked[channel]
-                            if candidate.ref.extra.get("verified_mapping") is not True
-                        )
-                    matches = []
-                    if new_candidates:
-                        _, matches = identify_and_match(
-                            client=client,
-                            subject_url=subject_url,
-                            candidate_urls=[ref.url for ref in new_candidates],
-                            browser_session=browser_session,
-                            photo_hash_cache=hash_store,
-                            stop_after_verified_sites=True,
-                        )
-                        for match in matches:
-                            if match.is_verified():
-                                store.save_verified_mapping(subject, match)
                     matches_by_url = {
                         canonicalize_url(match.ref.url): match for match in matches
                     }
@@ -2008,6 +2056,12 @@ def main(argv: list[str] | None = None) -> int:
     p_auto.add_argument("--force", action="store_true")
     p_auto.add_argument("--headless", action="store_true", default=False)
     p_auto.add_argument(
+        "--interactive-captcha",
+        action="store_true",
+        help="Wait (up to 90s) for the operator to clear a search-engine check "
+        "in the visible browser instead of skipping that engine",
+    )
+    p_auto.add_argument(
         "--no-web-search",
         action="store_true",
         help="Skip licence-first Bing/DuckDuckGo/Google search (use map/OTA search only)",
@@ -2088,6 +2142,12 @@ def main(argv: list[str] | None = None) -> int:
     p_discover.add_argument("--limit-per-site", type=int, default=5)
     p_discover.add_argument("--db", default=".parity/parity.db")
     p_discover.add_argument("--headless", action="store_true", default=False)
+    p_discover.add_argument(
+        "--interactive-captcha",
+        action="store_true",
+        help="Wait (up to 90s) for the operator to clear a search-engine check "
+        "in the visible browser instead of skipping that engine",
+    )
     p_discover.add_argument(
         "--no-web-search",
         action="store_true",

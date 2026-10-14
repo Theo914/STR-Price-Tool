@@ -3,6 +3,8 @@ beautifulsoup4>=4.12
 Pillow>=10.0
 numpy>=1.26
 scipy>=1.11
+# Keypoint photo matching fallback (parity/core/matching.py).
+opencv-python-headless>=4.9
 
 # Needed for the browser-rendered channels (Vrbo/Expedia, Booking.com,
 # Guesty). Patchright, not vanilla Playwright: it's a drop-in fork that
