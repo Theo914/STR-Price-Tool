@@ -458,8 +458,11 @@ class WebLicenceSearchProvider:
                         detail="page had no links; layout may have changed" if status == "error" else "",
                     )
                 )
-                # One engine answering is enough for this query.
-                break
+                # Stop at the first engine that surfaced OTA pages; engines
+                # index differently (Bing ignores quotes on some licence
+                # tokens), so an empty answer falls through to the next one.
+                if status == "hits":
+                    break
 
         by_site = {"airbnb": 0, "booking": 0}
         for ref in found.values():

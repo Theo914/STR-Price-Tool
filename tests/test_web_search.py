@@ -265,3 +265,22 @@ def test_cli_helper_reports_found_channels_and_skips_when_disabled(monkeypatch):
         Namespace(headless=True, no_web_search=True), subject, session, set(), providers
     ) == set()
     assert providers == []
+
+
+def test_engine_without_ota_links_falls_through_to_next_engine():
+    subject = _subject(registration_ids=["ET-0123-E"], title=None)
+    session = _FakeSession({
+        ("bing", '"ET-0123-E" site:airbnb.com'): {
+            "hrefs": ["https://community.example.com/thread/1"],
+            "text": "unrelated results",
+        },
+        ("duckduckgo", '"ET-0123-E" site:airbnb.com'): {
+            "hrefs": ["https://www.airbnb.com/rooms/4242"],
+            "text": "results",
+        },
+    })
+    provider = WebLicenceSearchProvider(session)
+    result = provider.discover(subject)
+    assert "https://www.airbnb.com/rooms/4242" in [ref.url for ref in result.refs]
+    first_two = [(o.engine, o.status) for o in provider.outcomes[:2]]
+    assert first_two == [("bing", "no_ota_links"), ("duckduckgo", "hits")]
