@@ -14,6 +14,10 @@ from parity.http_control import RequestDeferred
 from parity.storage import EvidenceStore
 
 
+_BOOKING_EMPTY_RESULTS_RE = re.compile(r"\b0 properties\b|no properties found", re.IGNORECASE)
+_BOOKING_PROPERTY_PATH_RE = re.compile(r"^/hotel/[a-z]{2}/[^/]+\.html$")
+
+
 class KnownMappingsProvider:
     name = "known_verified_mapping"
 
@@ -238,6 +242,9 @@ class BookingSearchProvider:
                 canonical = canonical_booking_url(url)
             except ValueError:
                 continue
+            if not _BOOKING_PROPERTY_PATH_RE.match(urlsplit(canonical).path):
+                # e.g. /hotel/index.html when Booking cannot resolve a query.
+                continue
             refs.append(PropertyRef(
                 site="booking",
                 raw_id=urlsplit(canonical).path.rsplit("/", 1)[-1][:-5],
@@ -249,8 +256,21 @@ class BookingSearchProvider:
             ))
         return refs
 
-    def _live_search(self, query: str) -> tuple[list[PropertyRef], str]:
-        search_url = self._search_url_for_query(query)
+    _RESULTS_READY_JS = """() => document.querySelector('[data-testid="property-card"]')
+        || /\\b0 properties\\b|no properties found/i.test(
+            (document.body && document.body.innerText) || '')"""
+
+    def _wait_for_results(self, page, timeout_ms: int) -> bool:
+        try:
+            page.wait_for_function(self._RESULTS_READY_JS, timeout=timeout_ms)
+            return True
+        except Exception:
+            return False
+
+    def _live_search(
+        self, query: str, search_url: str | None = None
+    ) -> tuple[list[PropertyRef], str]:
+        search_url = search_url or self._search_url_for_query(query)
         self.session.before_navigation("booking", "search")
         started = time.monotonic()
         page = self.session.new_page()
@@ -258,7 +278,18 @@ class BookingSearchProvider:
         try:
             response = page.goto(search_url, wait_until="domcontentloaded", timeout=25000)
             BrowserSession.decline_cookies(page)
-            page.wait_for_timeout(1400)
+            # Booking may first serve an HTTP 202 interstitial that reloads
+            # into the real results a few seconds later; wait for cards (or
+            # an explicit empty-results message) instead of a fixed delay.
+            if not self._wait_for_results(page, 15000):
+                # An interstitial that did not hand over: one reload only.
+                page.reload(wait_until="domcontentloaded", timeout=25000)
+                if not self._wait_for_results(page, 20000):
+                    raise ValueError(
+                        "Booking.com search page showed no result cards or empty-"
+                        "results message (interstitial or layout change)"
+                    )
+            page.wait_for_timeout(800)
             title = page.title()
             body_text = page.inner_text("body")
             if BrowserSession.is_bot_challenge(f"{title}\n{body_text}"):
@@ -319,6 +350,12 @@ class BookingSearchProvider:
                 "candidates": candidates,
             }
             refs = self._snapshot_refs(snapshot)
+            if not refs and not _BOOKING_EMPTY_RESULTS_RE.search(body_text):
+                raise ValueError(
+                    "Booking.com returned a page without property results or an "
+                    "empty-results message; the session or IP is probably being "
+                    "throttled (retry later from a normal connection)"
+                )
             self.session.record_navigation(
                 "booking", "search", (time.monotonic() - started) * 1000
             )
@@ -391,4 +428,50 @@ class BookingSearchProvider:
                 f"{mode}; {completed}/{len(queries)} bounded identity search(es) "
                 f"completed{failure_text}; {len(deduped)} unique property candidate(s)"
             ),
+        )
+
+
+class BookingMapProvider(BookingSearchProvider):
+    """Booking.com properties around the subject's exact coordinates.
+
+    Booking's free-text search often cannot resolve a holiday-rental title
+    and silently degrades to a generic page.  A latitude/longitude search
+    reliably lists nearby properties; each remains an unverified candidate.
+    """
+
+    name = "booking_map_search"
+
+    def __init__(self, session: BrowserSession, max_results: int = 25, radius_km: int = 2):
+        super().__init__(session, max_results=max_results, max_queries=1)
+        self.radius_km = radius_km
+
+    def _coordinate_url(self, subject: PropertyRef) -> str:
+        return "https://www.booking.com/searchresults.en-gb.html?" + urlencode({
+            "ss": subject.city or subject.title or "map",
+            "latitude": f"{subject.lat:.6f}",
+            "longitude": f"{subject.lng:.6f}",
+            "dest_type": "latlong",
+            "radius": self.radius_km,
+            "order": "distance_from_search",
+            "lang": "en-gb",
+        })
+
+    def discover(self, subject: PropertyRef) -> ProviderDiscoveryResult:
+        if subject.lat is None or subject.lng is None:
+            raise ValueError("Booking map discovery requires subject coordinates")
+        search_url = self._coordinate_url(subject)
+        label = f"map {subject.lat:.4f},{subject.lng:.4f} r={self.radius_km}km"
+        if self.session.offline:
+            refs = self._snapshot_refs(self.session.load_snapshot("booking", "search", search_url))
+            mode = "replayed"
+        else:
+            refs, _ = self._live_search(label, search_url=search_url)
+            mode = "completed"
+        deduped = {canonical_booking_url(ref.url): ref for ref in refs}
+        for position, ref in enumerate(deduped.values(), start=1):
+            ref.extra["booking_map_rank"] = position
+        return ProviderDiscoveryResult(
+            refs=list(deduped.values()),
+            diagnostic=f"{mode}; coordinate search within {self.radius_km}km; "
+            f"{len(deduped)} nearby property candidate(s)",
         )

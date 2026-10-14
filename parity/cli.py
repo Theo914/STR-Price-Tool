@@ -62,6 +62,7 @@ from parity.discovery.web_search import (
 )
 from parity.discovery.providers import (
     AirbnbMapProvider,
+    BookingMapProvider,
     BookingSearchProvider,
     HistoricalEvidenceProvider,
     KnownMappingsProvider,
@@ -236,7 +237,13 @@ def _http_client(args: argparse.Namespace):
         # Ignore ambient proxy variables.  Offline mode must not initialise a
         # proxy transport, and live audits need a stable, explicit point of
         # sale rather than whatever VPN/proxy happens to be set in the shell.
-        base_client = httpx.Client(timeout=25.0, follow_redirects=True, trust_env=False)
+        # PARITY_TRUST_ENV_PROXY=1 opts in for sandboxes whose only egress is
+        # a configured proxy (e.g. cloud development containers).
+        base_client = httpx.Client(
+            timeout=25.0,
+            follow_redirects=True,
+            trust_env=os.environ.get("PARITY_TRUST_ENV_PROXY") == "1",
+        )
         client = GovernedHttpClient(
             base_client,
             fixture_store,
@@ -873,6 +880,8 @@ def _cmd_discover(args: argparse.Namespace) -> int:
                             notify=lambda message: print(message, file=sys.stderr),
                         ))
                     if "booking" in requested_channels:
+                        if subject.lat is not None and subject.lng is not None:
+                            providers.append(BookingMapProvider(browser_session))
                         providers.append(BookingSearchProvider(browser_session))
                     report = DiscoveryEngine(
                         providers,
@@ -894,6 +903,27 @@ def _cmd_discover(args: argparse.Namespace) -> int:
     else:
         print(rendered)
     return 0
+
+
+_CHANNEL_PROVIDERS = {
+    "airbnb": ("web_licence_search", "airbnb_map_search"),
+    "booking": ("web_licence_search", "booking_map_search", "booking_public_search"),
+}
+
+
+def _channel_discovery_summary(discovery, channel: str) -> str:
+    """Explain a channel with no candidate: which searches ran and how each
+    ended, so a block, a layout change and an honest zero read differently."""
+    parts = []
+    for name in _CHANNEL_PROVIDERS.get(channel, ()):
+        if name in discovery.provider_errors:
+            parts.append(f"{name} FAILED: {discovery.provider_errors[name]}")
+        elif name in discovery.provider_diagnostics:
+            diagnostic = discovery.provider_diagnostics[name].split(" | ", 1)[0]
+            parts.append(f"{name}: {diagnostic}")
+    if not parts:
+        return f"No likely {channel} listing was found."
+    return f"No likely {channel} listing was found. " + "; ".join(parts)
 
 
 def _run_web_licence_search(args, subject, browser_session, known_sites, providers) -> set[str]:
@@ -1027,6 +1057,8 @@ def _cmd_auto(args: argparse.Namespace) -> int:
                     if "airbnb" not in known_sites | web_sites:
                         providers.append(AirbnbMapProvider(client))
                     if "booking" not in known_sites | web_sites:
+                        if subject.lat is not None and subject.lng is not None:
+                            providers.append(BookingMapProvider(browser_session))
                         providers.append(BookingSearchProvider(browser_session))
                     discovery = DiscoveryEngine(
                         providers,
@@ -1088,9 +1120,7 @@ def _cmd_auto(args: argparse.Namespace) -> int:
                         )
                         choice = verified_choice or review_choice
                         if choice is None:
-                            detail = discovery.provider_errors.get(
-                                "airbnb_map_search" if channel == "airbnb" else "booking_public_search"
-                            )
+                            detail = _channel_discovery_summary(discovery, channel)
                             placeholders.append(_automatic_placeholder_result(
                                 listing_id=local_listing_id,
                                 listing_name=name,

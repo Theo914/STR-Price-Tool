@@ -30,7 +30,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from parity.adapters.base import HttpOnly
-from parity.core.matching import find_licence_numbers
+from parity.core.matching import find_licence_numbers, registration_tokens
 from parity.core.models import (
     Outcome,
     PriceBreakdown,
@@ -46,8 +46,66 @@ def _rate_limit_notes(resp: httpx.Response) -> str:
     return f"HTTP 429 (rate limited); Retry-After={retry_after}" if retry_after else "HTTP 429 (rate limited)"
 
 _ID_RE = re.compile(r"/rooms/(\d+)")
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+_META_RE = re.compile(
+    r'<meta\s+(?:property|name)="(og:title|og:description|twitter:title)"\s+content="([^"]*)"',
+    re.IGNORECASE,
+)
+_PERSON_CAPACITY_RE = re.compile(r'"personCapacity"\s*:\s*(\d{1,2})\b')
+
+
+def _structural_from_meta(html: str) -> dict:
+    """Title and room counts from the listing's own share metadata.
+
+    ``og:title`` reads like ``Home in Woodbridge · ★4.75 · 1 bedroom · 1 bed
+    · 1.5 baths`` and ``og:description`` carries the listing title.  These
+    describe only this listing, unlike free page text which can mention
+    other properties.
+    """
+    meta = {key.lower(): html_lib.unescape(value) for key, value in _META_RE.findall(html)}
+    summary = meta.get("og:title", "")
+    out: dict = {}
+
+    def number(pattern: str) -> float | None:
+        found = re.search(pattern, summary, re.IGNORECASE)
+        return float(found.group(1)) if found else None
+
+    bedrooms = number(r"(\d+)\s+bedrooms?\b")
+    if bedrooms is not None:
+        out["bedrooms"] = int(bedrooms)
+    bathrooms = number(r"(\d+(?:\.\d+)?)\s+(?:private\s+|shared\s+)?baths?\b")
+    if bathrooms is not None:
+        out["bathrooms"] = bathrooms
+    capacity = _PERSON_CAPACITY_RE.search(html)
+    if capacity:
+        out["capacity"] = int(capacity.group(1))
+    title = meta.get("og:description", "").strip()
+    if title:
+        out["title"] = title
+    return out
+
+
+def _identity_text(html: str) -> str:
+    """Listing text including embedded JSON strings (descriptions, the
+    "Registration Details" section), with escapes and markup removed."""
+    text = (
+        html.replace("\\u003c", "<")
+        .replace("\\u003e", ">")
+        .replace("\\u0026", "&")
+        .replace("\\u002F", "/")
+        .replace("\\n", " ")
+    )
+    text = html_lib.unescape(text)
+    return _TAG_RE.sub(" ", text)
 _DEFERRED_STATE_RE = re.compile(
     r'<script[^>]*id="data-deferred-state-0"[^>]*>(.*?)</script>', re.DOTALL
+)
+_LEGACY_GALLERY_IMAGE_RE = re.compile(
+    r"https://a0\.muscache\.com/im/pictures/"
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:jpe?g|png|webp)",
+    re.IGNORECASE,
 )
 _MUSCACHE_IMAGE_RE = re.compile(
     r"https://a0\.muscache\.com/im/pictures/[^\s\"'<>]+",
@@ -190,7 +248,9 @@ def _line_amount(item: dict) -> float | None:
 
 def _line_category(label: str) -> str | None:
     low = label.casefold()
-    if "total" in low:
+    # Airbnb's all-in ("total price") display ends its checkout breakdown
+    # with "Price after discount" instead of "Total".
+    if "total" in low or low.strip() == "price after discount":
         return "total"
     if any(word in low for word in ("discount", "saving", "promotion", "promo")):
         return "discount"
@@ -209,7 +269,9 @@ def _line_category(label: str) -> str | None:
     return None
 
 
-def _displayed_total(structured_price: dict, items: list[dict]) -> float | None:
+def _displayed_total(
+    structured_price: dict, items: list[dict], nights: int | None = None
+) -> float | None:
     for item in items:
         if _line_category(_line_label(item)) == "total":
             amount = _line_amount(item)
@@ -227,6 +289,17 @@ def _displayed_total(structured_price: dict, items: list[dict]) -> float | None:
     primary = structured_price.get("primaryLine")
     if isinstance(primary, dict) and str(primary.get("qualifier") or "").casefold() == "total":
         return _money_value(primary.get("price") or primary.get("accessibilityLabel"))
+    # All-in display: "$595 AUD" + "for 3 nights" is the whole-stay total,
+    # accepted only when the night count matches the requested stay.
+    if (
+        isinstance(primary, dict)
+        and nights is not None
+        and structured_price.get("displayPriceStyle") == "TOTAL_ONLY"
+    ):
+        qualifier = str(primary.get("qualifier") or "").casefold().strip()
+        found = re.fullmatch(r"for (\d+) nights?", qualifier)
+        if found and int(found.group(1)) == nights:
+            return _money_value(primary.get("price") or primary.get("accessibilityLabel"))
     return None
 
 
@@ -527,15 +600,23 @@ class AirbnbAdapter(HttpOnly):
                 if pic:
                     gallery.append(pic)
 
+        page_text = _identity_text(resp.text)
+        registration_ids = list(find_licence_numbers(page_text))
+        structural = _structural_from_meta(resp.text)
         return PropertyRef(
             site=self.site,
             raw_id=raw_id,
             url=url,
+            licence_number=registration_ids[0] if registration_ids else None,
+            registration_ids=registration_ids,
+            bedrooms=structural.get("bedrooms"),
+            bathrooms=structural.get("bathrooms"),
+            capacity=structural.get("capacity"),
             lat=lat,
             lng=lng,
-            title=title if isinstance(title, str) else None,
+            title=title if isinstance(title, str) else structural.get("title"),
             gallery=gallery,
-            extra={},
+            extra={"registration_tokens": sorted(registration_tokens(page_text))},
         )
 
     @staticmethod
@@ -572,6 +653,23 @@ class AirbnbAdapter(HttpOnly):
             image_urls.append(f"{image_key}?im_w=720")
 
         if not image_urls:
+            # Older listings publish gallery photos as bare
+            # /im/pictures/<uuid>.<ext> without a Hosting-<id> marker.
+            # Platform assets and user avatars live in sub-folders, so
+            # requiring the uuid directly under /pictures/ excludes them.
+            for match in _LEGACY_GALLERY_IMAGE_RE.finditer(normalised_html):
+                image_key = match.group(0)
+                if image_key not in seen_images:
+                    seen_images.add(image_key)
+                    image_urls.append(f"{image_key}?im_w=720")
+
+        page_text = _identity_text(html)
+        registration_ids = list(dict.fromkeys([
+            *find_licence_numbers(visible_text),
+            *find_licence_numbers(page_text),
+        ]))
+        # A generic Airbnb shell has neither listing photos nor a licence.
+        if not image_urls and not registration_ids:
             return None
 
         def _integer(pattern: str) -> int | None:
@@ -596,7 +694,11 @@ class AirbnbAdapter(HttpOnly):
         )
         property_type = property_match.group(1).title() if property_match else None
 
-        registration_ids = list(find_licence_numbers(visible_text))
+        structural = _structural_from_meta(html)
+        title = title or structural.get("title")
+        bedrooms = structural.get("bedrooms", bedrooms)
+        bathrooms = structural.get("bathrooms", bathrooms)
+        capacity = structural.get("capacity", capacity)
         return PropertyRef(
             site="airbnb",
             raw_id=raw_id,
@@ -609,7 +711,10 @@ class AirbnbAdapter(HttpOnly):
             property_type=property_type,
             title=title,
             gallery=image_urls,
-            extra={"identity_source": "public_server_rendered_html"},
+            extra={
+                "identity_source": "public_server_rendered_html",
+                "registration_tokens": sorted(registration_tokens(page_text)),
+            },
         )
 
     @staticmethod
@@ -784,7 +889,7 @@ class AirbnbAdapter(HttpOnly):
         displayed_total = (
             precise_checkout_total
             if precise_checkout_total is not None
-            else _displayed_total(structured_price, items)
+            else _displayed_total(structured_price, items, (checkout - checkin).days)
         )
         unknown: list[str] = []
         for item in items:

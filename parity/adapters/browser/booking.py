@@ -23,7 +23,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from parity.adapters.base import NeedsBrowser
 from parity.adapters.browser.browser_session import BrowserSession
-from parity.core.matching import find_licence_numbers
+from parity.core.matching import find_licence_numbers, registration_tokens
 from parity.core.models import (
     Outcome,
     PriceBreakdown,
@@ -854,6 +854,9 @@ def _build_identity_snapshot(
         "raw_id": slug,
         "title": title or None,
         "registration_ids": registrations,
+        # Bounded, normalised licence-shaped tokens so identity can find the
+        # subject's id even in a registration format the regex lacks.
+        "registration_tokens": sorted(registration_tokens(body_text))[:3000],
         "lat": _as_float(geo.get("latitude")),
         "lng": _as_float(geo.get("longitude")),
         "country": str(country_value).strip() if country_value else None,
@@ -902,6 +905,9 @@ def _property_from_snapshot(snapshot: dict) -> PropertyRef:
         extra={
             "identity_source": snapshot.get("identity_source"),
             "snapshot_version": snapshot.get("snapshot_version"),
+            "registration_tokens": [
+                str(item) for item in snapshot.get("registration_tokens") or [] if item
+            ],
         },
     )
 

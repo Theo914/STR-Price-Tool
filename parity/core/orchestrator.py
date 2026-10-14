@@ -51,6 +51,7 @@ from parity.adapters.http.lodgify import _ID_IN_PATH_RE as LODGIFY_ID_RE
 from parity.adapters.http.travelstaytion import _ID_RE as TS_ID_RE
 from parity.adapters.registry import resolve
 from parity.core.matching import (
+    common_registration_ids,
     find_licence_numbers,
     match_photo_hashes,
     phash_image,
@@ -294,7 +295,11 @@ def identify_and_match(
 
         subject_ids = set(subject.registration_ids or ([subject.licence_number] if subject.licence_number else []))
         candidate_ids = set(cand_ref.registration_ids or ([cand_ref.licence_number] if cand_ref.licence_number else []))
-        common_ids = subject_ids & candidate_ids
+        common_ids = common_registration_ids(
+            subject_ids,
+            candidate_ids,
+            cand_ref.extra.get("registration_tokens") or (),
+        )
         conflicts = structural_conflicts(subject, cand_ref)
         if conflicts:
             conflict_detail = "; ".join(conflicts)

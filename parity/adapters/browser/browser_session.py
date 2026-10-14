@@ -6,6 +6,7 @@ enterprise code-integrity policy may reject Patchright's bundled Chromium.
 """
 from __future__ import annotations
 
+import os
 import platform
 from pathlib import Path
 from typing import Optional
@@ -95,6 +96,9 @@ class BrowserSession:
             }
             if channel is not None:
                 kwargs["channel"] = channel
+            elif os.environ.get("PARITY_BROWSER_EXECUTABLE"):
+                # Non-Windows development hosts with a preinstalled Chromium.
+                kwargs["executable_path"] = os.environ["PARITY_BROWSER_EXECUTABLE"]
             try:
                 self._context = self._playwright.chromium.launch_persistent_context(**kwargs)
                 self.browser_channel = label

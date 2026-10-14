@@ -17,7 +17,9 @@ LICENCE_RE = re.compile(
     r"(?<![\w.])(IT\d{6}[A-Z]\d[A-Z0-9]{8}"
     r"|(?:\d{5}|2[AB]\d{3})\d{6}[A-Z0-9]{2}"
     r"|(?:VFT|VUT|HUT[A-Z]?)[/-]?[A-Z0-9/-]{4,30}"
-    r"|\d{3,7}/AL)(?![\w.])"
+    r"|\d{3,7}/AL"
+    # Australia: WA STRA register and NSW PID-STRA numbers.
+    r"|STRA\d{4}[A-Z0-9]{6,10}|PID-STRA-\d{3,7}(?:-[A-Z0-9]{3,6})?)(?![\w.])"
     r"|(?:licen[cs]e|registration|registro|\bCIN|\bAMA|ΑΜΑ)"
     r"\W{0,15}(?:number|no|n[°º])?\W{0,5}([A-Z0-9][A-Z0-9/-]{4,30})",
     re.IGNORECASE,
@@ -35,6 +37,54 @@ def find_licence_numbers(text: str) -> dict[str, str]:
             start = max(0, m.start() - 30)
             out[val] = text[start:start + 90]
     return out
+
+
+def normalise_registration(value: object) -> str:
+    """Compare registration ids without case, spaces or punctuation."""
+    return re.sub(r"[^0-9A-Z]", "", str(value or "").upper())
+
+
+def is_distinctive_registration(value: object) -> bool:
+    """A normalised id long and specific enough to prove identity."""
+    compact = normalise_registration(value)
+    digits = sum(c.isdigit() for c in compact)
+    return len(compact) >= 6 and digits >= 3
+
+
+_TOKEN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9/_.-]{0,48}[A-Za-z0-9])?")
+
+
+def registration_tokens(text: str, limit: int = 500000) -> set[str]:
+    """Every licence-shaped token in page text, normalised.
+
+    Registration formats differ by country and new schemes appear often, so
+    identity also checks whether the subject's known id occurs anywhere in
+    the candidate page.  Adjacent tokens are joined to catch ids printed with
+    spaces (``HUTB 012345``).
+    """
+    raw = _TOKEN_RE.findall(text or "")[:limit]
+    tokens: set[str] = set()
+    previous = ""
+    for item in raw:
+        for candidate in (item, previous + item):
+            compact = normalise_registration(candidate)
+            if 6 <= len(compact) <= 48 and is_distinctive_registration(compact):
+                tokens.add(compact)
+        previous = item if len(item) <= 12 else ""
+    return tokens
+
+
+def common_registration_ids(subject_ids, candidate_ids, candidate_tokens=()) -> set[str]:
+    """Subject ids also published by the candidate, compared normalised."""
+    candidate_keys = {normalise_registration(item) for item in candidate_ids if item}
+    candidate_keys |= set(candidate_tokens or ())
+    return {
+        item
+        for item in subject_ids
+        if item
+        and is_distinctive_registration(item)
+        and normalise_registration(item) in candidate_keys
+    }
 
 
 # ---- Photo matching (DCT pHash) ------------------------------------------
