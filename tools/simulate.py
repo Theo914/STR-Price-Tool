@@ -137,6 +137,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ids", nargs="*", help="Run exactly these IDs (skip sampling)")
     parser.add_argument("--sample", type=int, default=10)
     parser.add_argument("--channels", nargs="+", default=["airbnb", "booking"])
+    parser.add_argument(
+        "--currencies", nargs="*", default=[],
+        help="Rotate these currencies across listings (default: listing's own)",
+    )
+    parser.add_argument("--exclude", nargs="*", default=[], help="IDs not to sample")
     parser.add_argument("--no-web-search", action="store_true")
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--pause", type=float, default=20.0, help="Seconds between listings")
@@ -156,7 +161,9 @@ def main(argv: list[str] | None = None) -> int:
         listings = [{"id": item} for item in args.ids]
     else:
         print(f"[sim] sampling {args.sample} listings from {len(args.seeds)} seed(s)...", file=sys.stderr)
-        listings = sample_listings(client, args.seeds, args.sample)
+        listings = sample_listings(client, args.seeds, args.sample + len(args.exclude))
+        listings = [item for item in listings if item["id"] not in set(args.exclude)]
+        listings = listings[:args.sample]
     (out_dir / "sample.json").write_text(json.dumps(listings, indent=2), encoding="utf-8")
 
     rows = []
@@ -172,6 +179,9 @@ def main(argv: list[str] | None = None) -> int:
             "--output", str(run_dir / "results.json"),
             "--dashboard-output", str(run_dir / "dashboard.html"),
         ]
+        if args.currencies:
+            listing["currency"] = args.currencies[(position - 1) % len(args.currencies)]
+            command += ["--currency", listing["currency"]]
         if args.no_web_search:
             command.append("--no-web-search")
         if args.headless:
@@ -207,12 +217,12 @@ def write_reports(out_dir: Path, rows: list[dict], channels: list[str]) -> None:
     with (out_dir / "report.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
         writer.writerow([
-            "id", "country", "title", "licence", "bedrooms", "photos", "seconds", "crash",
+            "id", "country", "currency", "title", "licence", "bedrooms", "photos", "seconds", "crash",
             *[f"{c}_{k}" for c in channels for k in ("status", "diff_pct", "error")],
         ])
         for row in rows:
             writer.writerow([
-                row.get("id"), row.get("country"), row.get("title"), row.get("licence"),
+                row.get("id"), row.get("country"), row.get("currency"), row.get("title"), row.get("licence"),
                 row.get("bedrooms"), row.get("photos"), row.get("seconds"), row.get("crash"),
                 *[
                     value
