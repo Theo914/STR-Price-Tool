@@ -128,3 +128,33 @@ def test_booking_live_pricing_stays_locked_without_explicit_capture_permission()
     assert result.outcome == Outcome.ERROR
     assert result.comparable_total is None
     assert "locked until explicitly authorised" in result.notes
+
+
+def test_booking_identity_retries_server_errors_but_not_client_errors(monkeypatch):
+    # Live regression (965991): Booking answered the property page with HTTP 500.
+    import parity.adapters.browser.booking as booking_module
+
+    monkeypatch.setattr(booking_module, "_IDENTIFY_RETRY_PAUSE_SECONDS", 0)
+    calls = []
+    outcomes = [booking_module._BookingServerError("HTTP 500"), "ref"]
+
+    def fake_once(self, url):
+        calls.append(url)
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(BookingAdapter, "_identify_once", fake_once)
+    assert BookingAdapter(object()).identify(CANONICAL) == "ref"
+    assert len(calls) == 2
+
+    def not_found(self, url):
+        calls.append(url)
+        raise ValueError("Booking.com property page returned HTTP 404")
+
+    calls.clear()
+    monkeypatch.setattr(BookingAdapter, "_identify_once", not_found)
+    with pytest.raises(ValueError, match="HTTP 404"):
+        BookingAdapter(object()).identify(CANONICAL)
+    assert len(calls) == 1

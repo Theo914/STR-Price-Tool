@@ -24,6 +24,14 @@ from parity.adapters.http.travelstaytion import TravelStaytionAdapter
 from parity.core.models import Outcome, PropertyRef
 
 
+
+@pytest.fixture(autouse=True)
+def _no_airbnb_retry_pause(monkeypatch):
+    import parity.adapters.http.airbnb as airbnb_module
+
+    monkeypatch.setattr(airbnb_module, "_IDENTIFY_RETRY_PAUSE_SECONDS", 0)
+
+
 def _client_with(handler) -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(handler))
 

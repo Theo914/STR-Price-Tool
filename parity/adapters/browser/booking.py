@@ -1751,6 +1751,14 @@ def price_booking_source(
     )
 
 
+_IDENTIFY_SERVER_ERROR_RETRIES = 2
+_IDENTIFY_RETRY_PAUSE_SECONDS = 4.0
+
+
+class _BookingServerError(ValueError):
+    """Booking answered with a 5xx: its fault, worth a paced retry."""
+
+
 class BookingAdapter(NeedsBrowser):
     site = "booking"
 
@@ -1758,6 +1766,18 @@ class BookingAdapter(NeedsBrowser):
         self._session = session
 
     def identify(self, url: str) -> PropertyRef:
+        # Booking intermittently answers a property page with a 5xx (live:
+        # HTTP 500 for 965991's match); one paced retry usually succeeds.
+        for attempt in range(1 + _IDENTIFY_SERVER_ERROR_RETRIES):
+            try:
+                return self._identify_once(url)
+            except _BookingServerError:
+                if attempt == _IDENTIFY_SERVER_ERROR_RETRIES:
+                    raise
+                time.sleep(_IDENTIFY_RETRY_PAUSE_SECONDS)
+        raise AssertionError("unreachable")
+
+    def _identify_once(self, url: str) -> PropertyRef:
         canonical_url = canonical_booking_url(url)
         if self._session.offline:
             return _property_from_snapshot(
@@ -1800,7 +1820,8 @@ class BookingAdapter(NeedsBrowser):
                     outcome=f"browser_http_{status}",
                 )
                 recorded = True
-                raise ValueError(f"Booking.com property page returned HTTP {status}")
+                error_class = _BookingServerError if status >= 500 else ValueError
+                raise error_class(f"Booking.com property page returned HTTP {status}")
 
             try:
                 headings = page.locator("h1, h2").all_text_contents()
