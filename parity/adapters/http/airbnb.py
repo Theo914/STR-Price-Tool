@@ -24,6 +24,7 @@ import html as html_lib
 import json
 import os
 import re
+import time
 from datetime import date
 from urllib.parse import urlparse
 
@@ -140,6 +141,8 @@ _MUSCACHE_IMAGE_RE = re.compile(
 )
 _MONEY_RE = re.compile(r"[-+]?\s*(\d[\d.,\s]*)")
 _RECONCILIATION_TOLERANCE = 0.02
+_IDENTIFY_SHELL_RETRIES = 2
+_IDENTIFY_RETRY_PAUSE_SECONDS = 1.0
 _CURRENCY_SYMBOLS = {"€": "EUR", "£": "GBP", "¥": "JPY"}
 _DOLLAR_PREFIXES = {"US": "USD", "A": "AUD", "AU": "AUD", "C": "CAD", "CA": "CAD", "NZ": "NZD"}
 _DOLLAR_RE = re.compile(r"(?<![A-Za-z])([A-Za-z]{0,3})\$")
@@ -639,13 +642,25 @@ class AirbnbAdapter(HttpOnly):
             "adults": 2,
             "currency": "EUR",
         }
-        resp = self._client.get(url, params=params)
-        if resp.status_code == 429:
-            raise RuntimeError(_rate_limit_notes(resp))
-        resp.raise_for_status()
-        state, parse_error = self._extract_deferred_state(resp.text)
+        # Airbnb sometimes serves a server-rendered shell that carries only
+        # the first 2-5 gallery photos (live: 34307275 read 2 of 61, so the
+        # photo check could not confirm a true match).  Ask again before
+        # settling for that thin variant.
+        fallback = None
+        # A replayed fixture never changes, so offline runs read it once.
+        retries = 0 if getattr(self._client, "offline", False) else _IDENTIFY_SHELL_RETRIES
+        for attempt in range(1 + retries):
+            if attempt:
+                time.sleep(_IDENTIFY_RETRY_PAUSE_SECONDS)
+            resp = self._client.get(url, params=params)
+            if resp.status_code == 429:
+                raise RuntimeError(_rate_limit_notes(resp))
+            resp.raise_for_status()
+            state, parse_error = self._extract_deferred_state(resp.text)
+            if state:
+                break
+            fallback = self._identify_from_public_html(resp.text, raw_id, url) or fallback
         if not state:
-            fallback = self._identify_from_public_html(resp.text, raw_id, url)
             if fallback is not None:
                 return fallback
             raise ValueError(f"identify(): {self._diagnose(resp.text, parse_error)}")

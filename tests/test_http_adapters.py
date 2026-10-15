@@ -754,3 +754,32 @@ def test_avantio_parses_total_and_non_refundable():
     assert result.comparable_total == 3640.0
     assert result.cancellation_type == "non-refundable"
     assert result.refundable is False
+
+
+def test_airbnb_identity_retries_thin_shell_before_settling(monkeypatch):
+    # Live regression (726363 / 34307275): a shell page carried 2 of 61 photos.
+    import parity.adapters.http.airbnb as airbnb_module
+
+    monkeypatch.setattr(airbnb_module, "_IDENTIFY_RETRY_PAUSE_SECONDS", 0)
+    room_id = "34307275"
+    shell = (
+        '<html data-is-hyperloop="true"><body><h1>Superhost Villa DKZ</h1>'
+        f'<img src="https://a0.muscache.com/im/pictures/hosting/Hosting-{room_id}/original/a.jpeg">'
+        "</body></html>"
+    )
+    photos = [
+        {"baseUrl": f"https://a0.muscache.com/im/pictures/hosting/Hosting-{room_id}/original/{n}.jpeg"}
+        for n in range(12)
+    ]
+    state = {"niobeClientData": [["x", {"data": {"title": "Villa", "lat": 31.6, "lng": -7.9,
+                                                  "photos": photos}}]]}
+    hydrated = f'<script id="data-deferred-state-0">{json.dumps(state)}</script>'
+    pages = [shell, hydrated]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=pages.pop(0) if pages else hydrated)
+
+    ref = AirbnbAdapter(client=_client_with(handler)).identify(
+        f"https://www.airbnb.com/rooms/{room_id}"
+    )
+    assert len(ref.gallery) == 12
