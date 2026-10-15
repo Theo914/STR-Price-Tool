@@ -1591,7 +1591,8 @@ def _cmd_quote(args: argparse.Namespace) -> int:
             )
             subject_adapter = get_http_adapter(subject.site, client=client)
             windows = _calendar_preferred_windows(
-                subject_adapter, subject, windows, today, args.min_lead_days
+                subject_adapter, subject, windows, today, args.min_lead_days,
+                fail_when_closed=True,
             )
 
             def subject_probe(window):
@@ -1751,7 +1752,8 @@ def _cmd_quote(args: argparse.Namespace) -> int:
                 )
                 subject_adapter = get_http_adapter(subject.site, client=client)
                 windows = _calendar_preferred_windows(
-                    subject_adapter, subject, windows, today, args.min_lead_days
+                    subject_adapter, subject, windows, today, args.min_lead_days,
+                    fail_when_closed=True,
                 )
 
                 def probe(window):
