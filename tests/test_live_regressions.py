@@ -138,3 +138,18 @@ def test_airbnb_total_before_taxes_is_never_compared():
     result, _ = _price_capture("airbnb_stays_pdp_sections_34141360_gbp_before_taxes.json")
     assert result.outcome == Outcome.INCOMPLETE_EVIDENCE
     assert "before taxes" in result.notes
+
+
+def test_airbnb_bare_dollar_confirms_only_a_requested_dollar_currency():
+    # Live regression (707947, USD): Airbnb showed "$8,123" with no code.
+    from parity.adapters.http.airbnb import _observed_currency
+
+    price = {"primaryLine": {"price": "$8,123.45", "qualifier": "for 3 nights"}}
+    assert _observed_currency(price, "USD") == "USD"
+    assert _observed_currency(price, "AUD") == "AUD"
+    assert _observed_currency(price, "GBP") is None
+    assert _observed_currency(price) is None
+    assert _observed_currency({"price": "US$8,123"}, "AUD") == "USD"
+    assert _observed_currency({"price": "$8,123 AUD"}, "USD") == "AUD"
+    assert _observed_currency({"price": "MX$8,123"}, "USD") is None
+    assert _observed_currency({"price": "$8,123 + £20"}, "USD") is None

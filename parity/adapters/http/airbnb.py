@@ -134,6 +134,8 @@ _MUSCACHE_IMAGE_RE = re.compile(
 _MONEY_RE = re.compile(r"[-+]?\s*(\d[\d.,\s]*)")
 _RECONCILIATION_TOLERANCE = 0.02
 _CURRENCY_SYMBOLS = {"€": "EUR", "£": "GBP", "¥": "JPY"}
+_DOLLAR_PREFIXES = {"US": "USD", "A": "AUD", "AU": "AUD", "C": "CAD", "CA": "CAD", "NZ": "NZD"}
+_DOLLAR_RE = re.compile(r"(?<![A-Za-z])([A-Za-z]{0,3})\$")
 _STAYS_PDP_OPERATION_HASH = "c47b106f155568d32d4396fac7bdd31dbffb3dead2ad9e5f1cf93a94bf7e5c75"
 # Public browser key exposed in Airbnb's logged-out Hyperloop bootstrap data.
 _AIRBNB_PUBLIC_API_KEY = "d306zoyjsyarp7ifhu67rjxn52tv0t20"
@@ -337,7 +339,7 @@ def _precise_checkout_total(state, observed_currency: str) -> float | None:
     def visit(node) -> None:
         if isinstance(node, dict):
             if node.get("__typename") == "BasicPriceDetail":
-                node_currency = _observed_currency(node)
+                node_currency = _observed_currency(node, observed_currency)
                 if node_currency == observed_currency:
                     price_details = _find_key(node.get("explanationData"), "priceDetails")
                     for item in _price_detail_items(price_details):
@@ -355,12 +357,18 @@ def _precise_checkout_total(state, observed_currency: str) -> float | None:
     return next(iter(totals)) if len(totals) == 1 else None
 
 
-def _observed_currency(structured_price: dict) -> str | None:
-    """Read the currency Airbnb actually rendered; never trust only the request."""
+def _observed_currency(structured_price: dict, requested: str | None = None) -> str | None:
+    """Read the currency Airbnb actually rendered; never trust only the request.
+
+    A bare "$" (Airbnb's USD display, e.g. "$8,030") only confirms a requested
+    dollar currency when nothing else on the price names a different one.
+    """
     explicit: set[str] = set()
     symbols: set[str] = set()
+    bare_dollar = False
 
     def visit(value, key: str | None = None) -> None:
+        nonlocal bare_dollar
         if isinstance(value, dict):
             for child_key, child in value.items():
                 visit(child, child_key)
@@ -375,6 +383,14 @@ def _observed_currency(structured_price: dict) -> str | None:
             for symbol, code in _CURRENCY_SYMBOLS.items():
                 if symbol in value:
                     symbols.add(code)
+            for prefix in _DOLLAR_RE.findall(value):
+                code = _DOLLAR_PREFIXES.get(prefix.upper())
+                if code:
+                    symbols.add(code)
+                elif prefix:
+                    symbols.add(f"{prefix.upper()}$")
+                else:
+                    bare_dollar = True
             explicit.update(re.findall(r"(?<![A-Z])[A-Z]{3}(?![A-Z])", value.upper()))
 
     visit(structured_price)
@@ -382,6 +398,14 @@ def _observed_currency(structured_price: dict) -> str | None:
         "AUD", "CAD", "CHF", "EUR", "GBP", "JPY", "NZD", "USD",
     }}
     observed = recognised | symbols
+    if any(code.endswith("$") for code in observed):
+        return None  # a dollar we cannot name (e.g. MX$)
+    if bare_dollar:
+        dollars = set(_DOLLAR_PREFIXES.values())
+        if not observed <= dollars:
+            return None  # "$" beside a non-dollar currency is ambiguous
+        if not observed and requested in dollars:
+            observed = {requested}
     return next(iter(observed)) if len(observed) == 1 else None
 
 
@@ -900,7 +924,7 @@ class AirbnbAdapter(HttpOnly):
                 "not the guest total (set PARITY_AIRBNB_COUNTRY to the guest's country)",
                 str(resp.url),
             )
-        observed_currency = _observed_currency(structured_price)
+        observed_currency = _observed_currency(structured_price, currency)
         if observed_currency is None:
             return _err(
                 Outcome.INCOMPLETE_EVIDENCE,

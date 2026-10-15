@@ -1,6 +1,6 @@
 TravelStaytion Parity Desk
 Technical handoff release: Hotfix 49
 Prepared: 14 October 2026
-Expected regression suite: 380 passed
+Expected regression suite: 381 passed
 Primary workflow: single TravelStaytion listing search
 
