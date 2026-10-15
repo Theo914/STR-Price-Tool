@@ -476,3 +476,27 @@ def test_one_ota_failing_does_not_void_the_other_comparisons():
             lambda w: result("travelstaytion", w, Outcome.PRICED),
             [("booking", lambda w: result("booking", w, Outcome.ERROR))],
         )
+
+
+def test_closed_travelstaytion_calendar_stops_shared_selection_plainly():
+    # Live regression (756432): the calendar published no check-ins at all.
+    from datetime import date, timedelta
+
+    import pytest
+
+    from parity.cli import _calendar_preferred_windows
+    from parity.core.date_policy import candidate_date_windows
+
+    class ClosedCalendar:
+        def open_checkin_dates(self, ref):
+            return []
+
+    today = date(2026, 10, 15)
+    windows = candidate_date_windows(
+        today=today, min_lead_days=30, target_lead_days=45, stay_nights=1, search_weeks=8,
+    )
+    with pytest.raises(ValueError, match="no open check-in dates at all"):
+        _calendar_preferred_windows(
+            ClosedCalendar(), None, windows, today, 30, fail_when_closed=True
+        )
+    assert _calendar_preferred_windows(ClosedCalendar(), None, windows, today, 30) == windows

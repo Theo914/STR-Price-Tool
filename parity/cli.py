@@ -402,8 +402,15 @@ def _portfolio_candidate_ref(job: dict, requested_currency: str) -> tuple[Proper
     return subject, candidate
 
 
-def _calendar_preferred_windows(subject_adapter, subject, windows, today, min_lead_days):
-    """Use the subject's open calendar dates when it publishes them."""
+def _calendar_preferred_windows(
+    subject_adapter, subject, windows, today, min_lead_days, *, fail_when_closed=False
+):
+    """Use the subject's open calendar dates when it publishes them.
+
+    With ``fail_when_closed`` a calendar that publishes no open check-in at
+    all (TravelStaytion's covers two years) stops the check with a plain
+    reason instead of probing weeks that cannot be booked.
+    """
     reader = getattr(subject_adapter, "open_checkin_dates", None)
     if reader is None:
         return windows
@@ -414,6 +421,11 @@ def _calendar_preferred_windows(subject_adapter, subject, windows, today, min_le
     except Exception as error:
         print(f"[parity] calendar unavailable ({error}); using weekly windows", file=sys.stderr)
         return windows
+    if fail_when_closed and open_dates is not None and not open_dates:
+        raise ValueError(
+            "TravelStaytion's calendar has no open check-in dates at all, so this "
+            "listing cannot be booked or compared right now (closed or fully booked)"
+        )
     preferred = prefer_open_checkins(
         windows, open_dates, earliest=today + timedelta(days=min_lead_days)
     )
@@ -483,7 +495,8 @@ def _select_portfolio_shared_minimum(
     with _http_client(shared_args) as client:
         subject_adapter = get_http_adapter(subject.site, client=client)
         windows = _calendar_preferred_windows(
-            subject_adapter, subject, windows, today, args.min_lead_days
+            subject_adapter, subject, windows, today, args.min_lead_days,
+            fail_when_closed=True,
         )
 
         def subject_probe(window):
