@@ -153,3 +153,15 @@ def test_airbnb_bare_dollar_confirms_only_a_requested_dollar_currency():
     assert _observed_currency({"price": "$8,123 AUD"}, "USD") == "AUD"
     assert _observed_currency({"price": "MX$8,123"}, "USD") is None
     assert _observed_currency({"price": "$8,123 + £20"}, "USD") is None
+
+
+def test_airbnb_page_timestamp_is_not_read_as_a_french_licence():
+    # Live regression (814642 candidate): PageGenerateAtToken looked like a licence.
+    from parity.adapters.http.airbnb import _identity_text
+    from parity.core.matching import find_licence_numbers
+
+    html = (
+        '["PageGenerateAtToken",1792064261429],{"createdAt":1792064261429}'
+        '<div>Registration number: 7510609703582</div>'
+    )
+    assert list(find_licence_numbers(_identity_text(html))) == ["7510609703582"]

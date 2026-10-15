@@ -107,11 +107,18 @@ def _listing_image_markers(raw_id: str) -> tuple[str, ...]:
     return (f"Hosting-{raw_id}/", *encoded)
 
 
+# Page timestamps such as ["PageGenerateAtToken",1792064261429] are 13 digits,
+# the same shape as a French registration number; drop them before scanning.
+_JSON_TIMESTAMP_RE = re.compile(
+    r'"[A-Za-z_]*(?:At|Time|Timestamp|Date)[A-Za-z_]*"\s*[,:]\s*\d{10,13}\b'
+)
+
+
 def _identity_text(html: str) -> str:
     """Listing text including embedded JSON strings (descriptions, the
     "Registration Details" section), with escapes and markup removed."""
     text = (
-        html.replace("\\u003c", "<")
+        _JSON_TIMESTAMP_RE.sub(" ", html).replace("\\u003c", "<")
         .replace("\\u003e", ">")
         .replace("\\u0026", "&")
         .replace("\\u002F", "/")
