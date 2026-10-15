@@ -642,17 +642,18 @@ class AirbnbAdapter(HttpOnly):
             "adults": 2,
             "currency": "EUR",
         }
-        # Airbnb sometimes serves a server-rendered shell that carries only
-        # the first 2-5 gallery photos (live: 34307275 read 2 of 61, so the
-        # photo check could not confirm a true match).  Ask again before
-        # settling for that thin variant.
+        # Airbnb can still serve a server-rendered shell that carries only
+        # the first 2-5 gallery photos, so the photo check cannot confirm a
+        # true match.  Ask again before settling for that thin variant.
         fallback = None
         # A replayed fixture never changes, so offline runs read it once.
         retries = 0 if getattr(self._client, "offline", False) else _IDENTIFY_SHELL_RETRIES
         for attempt in range(1 + retries):
             if attempt:
                 time.sleep(_IDENTIFY_RETRY_PAUSE_SECONDS)
-            resp = self._client.get(url, params=params)
+            # Without browser navigation headers Airbnb serves the thin shell
+            # page (2 of 61 photos for 34307275) on every request.
+            resp = self._client.get(url, params=params, headers=AIRBNB_NAVIGATION_HEADERS)
             if resp.status_code == 429:
                 raise RuntimeError(_rate_limit_notes(resp))
             resp.raise_for_status()

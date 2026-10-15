@@ -783,3 +783,16 @@ def test_airbnb_identity_retries_thin_shell_before_settling(monkeypatch):
         f"https://www.airbnb.com/rooms/{room_id}"
     )
     assert len(ref.gallery) == 12
+
+
+def test_airbnb_identity_sends_browser_navigation_headers():
+    from parity.adapters.http.airbnb import AIRBNB_NAVIGATION_HEADERS
+
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["ua"] = request.headers.get("user-agent")
+        return httpx.Response(200, text='<html><body><h1>x</h1><div>Registration number: ETV-2071-E</div></body></html>')
+
+    AirbnbAdapter(client=_client_with(handler)).identify("https://www.airbnb.com/rooms/34307275")
+    assert seen["ua"] == AIRBNB_NAVIGATION_HEADERS["User-Agent"]
