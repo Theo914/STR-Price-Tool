@@ -68,6 +68,12 @@ def _structural_from_meta(html: str) -> dict:
     """
     meta = {key.lower(): html_lib.unescape(value) for key, value in _META_RE.findall(html)}
     summary = meta.get("og:title", "")
+    # The hydrated page variant carries a generic og:title; the same
+    # "Villa in X · 4 bedrooms · 5 beds · 6.5 baths" line is in sharingConfig.
+    if not re.search(r"\bbedrooms?\b|\bbaths?\b", summary, re.IGNORECASE):
+        shared = _SHARING_TITLE_RE.search(html)
+        if shared:
+            summary = _json_string(shared.group(1))
     out: dict = {}
 
     def number(pattern: str) -> float | None:
@@ -84,9 +90,28 @@ def _structural_from_meta(html: str) -> dict:
     if capacity:
         out["capacity"] = int(capacity.group(1))
     title = meta.get("og:description", "").strip()
+    if not title:
+        named = _LD_RENTAL_NAME_RE.search(html)
+        if named:
+            title = _json_string(named.group(1)).strip()
     if title:
         out["title"] = title
     return out
+
+
+_SHARING_TITLE_RE = re.compile(
+    r'"sharingConfig":\{"__typename":"PdpSharingConfig","title":"((?:[^"\\]|\\.)*)"'
+)
+_LD_RENTAL_NAME_RE = re.compile(
+    r'"@type":"VacationRental","identifier":"[^"]*","name":"((?:[^"\\]|\\.)*)"'
+)
+
+
+def _json_string(raw: str) -> str:
+    try:
+        return json.loads(f'"{raw}"')
+    except ValueError:
+        return raw
 
 
 _BEFORE_TAXES_RE = re.compile(

@@ -165,3 +165,22 @@ def test_airbnb_page_timestamp_is_not_read_as_a_french_licence():
         '<div>Registration number: 7510609703582</div>'
     )
     assert list(find_licence_numbers(_identity_text(html))) == ["7510609703582"]
+
+
+def test_airbnb_hydrated_page_reads_counts_and_name_without_og_tags():
+    # Live (1529026680963371371): the hydrated variant has a generic og:title.
+    from parity.adapters.http.airbnb import _structural_from_meta
+
+    html = (
+        '<meta property="og:title" content="Airbnb: Vacation Rentals">'
+        '<script type="application/ld+json">{"@context":"https://schema.org",'
+        '"@type":"VacationRental","identifier":"abc=","name":"Superhost Villa Monica",'
+        '"description":"x"}</script>'
+        '"sharingConfig":{"__typename":"PdpSharingConfig","title":"Villa in Marrakesh '
+        '\\u00b7 4 bedrooms \\u00b7 5 beds \\u00b7 6.5 baths","propertyType":"Entire villa",'
+        '"personCapacity":8,'
+    )
+    out = _structural_from_meta(html)
+    assert out["title"] == "Superhost Villa Monica"
+    assert out["bedrooms"] == 4
+    assert out["bathrooms"] == 6.5

@@ -24,5 +24,5 @@ if ($LASTEXITCODE -ne 0) { throw "The regression suite failed." }
 
 Write-Host ""
 Write-Host "Setup complete. Run .\RUN-APP.ps1 to launch Skopos."
-Write-Host "Expected regression result: 386 passed."
+Write-Host "Expected regression result: 387 passed."
 
