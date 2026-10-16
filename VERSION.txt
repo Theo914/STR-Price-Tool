@@ -1,6 +1,6 @@
 Skopos — TravelStaytion rate parity
 Technical handoff release: Hotfix 49
 Prepared: 14 October 2026
-Expected regression suite: 389 passed
+Expected regression suite: 390 passed
 Primary workflow: single TravelStaytion listing search
 

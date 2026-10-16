@@ -123,3 +123,13 @@ def test_local_app_serves_result_downloads(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_launcher_keeps_polling_through_a_missed_status_update():
+    # Live: one failed /api/status fetch stopped the page while the check ran on.
+    from parity.app import _launcher_html
+
+    page = _launcher_html("token")
+    assert "Reconnecting to the local app" in page
+    assert "setTimeout(poll,pollFailures<30?2000:5000)" in page
+    assert "if(data.status==='running'){run.disabled=true" in page
