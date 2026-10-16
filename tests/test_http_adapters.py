@@ -804,3 +804,30 @@ def test_airbnb_identity_sends_browser_navigation_headers():
 
     AirbnbAdapter(client=_client_with(handler)).identify("https://www.airbnb.com/rooms/34307275")
     assert seen["ua"] == AIRBNB_NAVIGATION_HEADERS["User-Agent"]
+
+
+def test_airbnb_identity_follows_domain_switch_handoff_page():
+    # Live (965991 from a Greek network): .com answered with a 941-byte
+    # "Redirecting to www.airbnb.co.uk" form instead of the listing.
+    room_id = "1529026680963371371"
+    handoff = (
+        '<!DOCTYPE html> <html> <head><meta charset="utf-8"><title>Redirecting to '
+        'www.airbnb.co.uk</title></head> <body onload="document.forms[0].submit()"> '
+        '<form method="POST" action="https://www.airbnb.co.uk/v2/domain_switch/handoff"> '
+        '<input type="hidden" name="version" value="1"></form></body></html>'
+    )
+    listing = (
+        '<html><body><h1>Superhost Villa Monica</h1>'
+        f'<img src="https://a0.muscache.com/im/pictures/prohost-api/Hosting-{room_id}/original/a.jpeg">'
+        "</body></html>"
+    )
+    hosts = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        hosts.append(request.url.host)
+        return httpx.Response(200, text=handoff if request.url.host == "www.airbnb.com" else listing)
+
+    ref = AirbnbAdapter(client=_client_with(handler)).identify(f"https://www.airbnb.com/rooms/{room_id}")
+    assert "www.airbnb.co.uk" in hosts
+    assert ref.title == "Superhost Villa Monica"
+    assert len(ref.gallery) == 1

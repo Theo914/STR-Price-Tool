@@ -444,6 +444,19 @@ def _observed_currency(structured_price: dict, requested: str | None = None) -> 
     return next(iter(observed)) if len(observed) == 1 else None
 
 
+_DOMAIN_SWITCH_RE = re.compile(
+    r'action="https://(www\.airbnb\.[a-z.]{2,12})/v2/domain_switch/handoff"', re.IGNORECASE
+)
+
+
+def _domain_switch_host(html: str) -> str | None:
+    """The Airbnb domain named by a short domain-switch handoff page."""
+    if len(html) > 20000 or "domain_switch/handoff" not in html:
+        return None
+    found = _DOMAIN_SWITCH_RE.search(html)
+    return found.group(1).lower() if found else None
+
+
 def _airbnb_refund_terms(state) -> tuple[bool | None, str | None]:
     """Refundability from the dated cancellation milestones Airbnb shows.
 
@@ -723,6 +736,19 @@ class AirbnbAdapter(HttpOnly):
             if resp.status_code == 429:
                 raise RuntimeError(_rate_limit_notes(resp))
             resp.raise_for_status()
+            # Airbnb may answer with a tiny auto-submitting "Redirecting to
+            # www.airbnb.co.uk" handoff page (live, en-GB visitors); follow it
+            # by asking the named Airbnb domain for the same room directly.
+            switched_host = _domain_switch_host(resp.text)
+            if switched_host:
+                resp = self._client.get(
+                    f"https://{switched_host}/rooms/{raw_id}",
+                    params=params,
+                    headers=AIRBNB_NAVIGATION_HEADERS,
+                )
+                if resp.status_code == 429:
+                    raise RuntimeError(_rate_limit_notes(resp))
+                resp.raise_for_status()
             state, parse_error = self._extract_deferred_state(resp.text)
             if state:
                 break
