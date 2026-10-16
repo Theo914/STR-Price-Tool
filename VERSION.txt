@@ -1,4 +1,4 @@
-Skopos — TravelStaytion rate parity
+Skopia — TravelStaytion rate parity
 Technical handoff release: Hotfix 49
 Prepared: 14 October 2026
 Expected regression suite: 391 passed

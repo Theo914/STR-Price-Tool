@@ -1,4 +1,4 @@
-# Skopos (TravelStaytion rate parity) — technical handoff
+# Skopia (TravelStaytion rate parity) — technical handoff
 
 ## Handoff state
 

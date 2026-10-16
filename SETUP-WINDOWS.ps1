@@ -23,6 +23,6 @@ if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed." }
 if ($LASTEXITCODE -ne 0) { throw "The regression suite failed." }
 
 Write-Host ""
-Write-Host "Setup complete. Run .\RUN-APP.ps1 to launch Skopos."
+Write-Host "Setup complete. Run .\RUN-APP.ps1 to launch Skopia."
 Write-Host "Expected regression result: 391 passed."
 
