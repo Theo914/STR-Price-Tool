@@ -2112,7 +2112,7 @@ def main(argv: list[str] | None = None) -> int:
     p_auto.add_argument("--target-lead-days", type=int, default=45)
     p_auto.add_argument("--auto-date-search-weeks", type=int, default=8)
     p_auto.add_argument("--minimum-stay-max-adjustments", type=int, default=4)
-    p_auto.add_argument("--limit-per-site", type=int, default=5)
+    p_auto.add_argument("--limit-per-site", type=int, default=8)
     p_auto.add_argument("--min-lead-days", type=int, default=30)
     p_auto.add_argument(
         "--date-timezone",
@@ -2156,9 +2156,9 @@ def main(argv: list[str] | None = None) -> int:
         travelstaytion_pricing_budget=240,
         travelstaytion_image_budget=400,
         airbnb_search_budget=20,
-        airbnb_page_budget=20,
+        airbnb_page_budget=40,
         airbnb_pricing_budget=20,
-        airbnb_image_budget=400,
+        airbnb_image_budget=640,
         booking_search_budget=10,
         booking_page_budget=20,
         booking_pricing_budget=20,

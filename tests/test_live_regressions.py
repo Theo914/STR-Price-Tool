@@ -184,3 +184,39 @@ def test_airbnb_hydrated_page_reads_counts_and_name_without_og_tags():
     assert out["title"] == "Superhost Villa Monica"
     assert out["bedrooms"] == 4
     assert out["bathrooms"] == 6.5
+
+
+def test_capacity_gap_is_soft_when_bedrooms_match_but_blocks_otherwise():
+    # Live (965991 run on a Greek network): an 8-guest subject met a 15-guest
+    # candidate and photos were never checked.  Same bedrooms -> let photos decide.
+    from types import SimpleNamespace
+
+    from parity.core.matching import split_structural_conflicts
+
+    subject = SimpleNamespace(bedrooms=4, capacity=8, bathrooms=4)
+    same_rooms = SimpleNamespace(bedrooms=4, capacity=15, bathrooms=4)
+    blocking, soft = split_structural_conflicts(subject, same_rooms)
+    assert blocking == [] and soft == ["capacity conflict: subject 8, candidate 15"]
+
+    unknown_rooms = SimpleNamespace(bedrooms=None, capacity=15, bathrooms=4)
+    blocking, _ = split_structural_conflicts(subject, unknown_rooms)
+    assert blocking == ["capacity conflict: subject 8, candidate 15"]
+
+    more_rooms = SimpleNamespace(bedrooms=6, capacity=15, bathrooms=4)
+    blocking, _ = split_structural_conflicts(subject, more_rooms)
+    assert any(item.startswith("bedrooms") for item in blocking)
+
+
+def test_airbnb_refundability_comes_from_dated_cancellation_milestones():
+    import json
+
+    from parity.adapters.http.airbnb import _airbnb_refund_terms
+
+    strict = json.loads((FIXTURES / "airbnb_stays_pdp_sections_34141360_gbp_with_taxes.json").read_text(encoding="utf-8"))
+    assert _airbnb_refund_terms(strict) == (
+        False, "Free cancellation for 24 hours. After that, the reservation is non-refundable."
+    )
+    flexible = json.loads((FIXTURES / "airbnb_stays_pdp_sections_all_in_total_aud.json").read_text(encoding="utf-8"))
+    refundable, label = _airbnb_refund_terms(flexible)
+    assert refundable is True and label.startswith("Free cancellation before January 16")
+    assert _airbnb_refund_terms({}) == (None, None)

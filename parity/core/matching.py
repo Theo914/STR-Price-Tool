@@ -203,12 +203,22 @@ def split_structural_conflicts(subject, candidate) -> tuple[list[str], list[str]
     Channels publish bathrooms inconsistently (half baths, separate WCs) and
     capacity often differs by a sofa bed, so any bathroom difference and a
     capacity difference of exactly two are recorded but do not stop the
-    licence/photo checks.  Bedrooms and larger capacity gaps stay blocking.
+    licence/photo checks.  When both sides publish the same bedroom count,
+    any capacity gap is soft too: hosts count extra beds differently, and
+    the photo check still has to prove identity.  Bedroom conflicts, and
+    larger capacity gaps without matching bedrooms, stay blocking.
     """
     blocking: list[str] = []
     soft: list[str] = []
+    same_bedrooms = (
+        known_count(subject.bedrooms)
+        and known_count(candidate.bedrooms)
+        and subject.bedrooms == candidate.bedrooms
+    )
     for item in structural_conflicts(subject, candidate):
         if item.startswith("bathrooms"):
+            soft.append(item)
+        elif item.startswith("capacity") and same_bedrooms:
             soft.append(item)
         elif (
             item.startswith("capacity")

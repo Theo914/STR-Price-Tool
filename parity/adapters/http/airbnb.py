@@ -444,6 +444,47 @@ def _observed_currency(structured_price: dict, requested: str | None = None) -> 
     return next(iter(observed)) if len(observed) == 1 else None
 
 
+def _airbnb_refund_terms(state) -> tuple[bool | None, str | None]:
+    """Refundability from the dated cancellation milestones Airbnb shows.
+
+    Refundable means a full refund is available before some date ahead of
+    the stay ("Before Jan 16: Full refund").  The 24-hour full refund after
+    booking ("Within 24 hours after booking") is a grace period every
+    booking gets, so a policy offering only that is non-refundable.
+    """
+    policy = None
+
+    def visit(node) -> None:
+        nonlocal policy
+        if policy is not None:
+            return
+        if isinstance(node, dict):
+            if node.get("__typename") == "PdpCancellationPolicy":
+                policy = node
+                return
+            for child in node.values():
+                visit(child)
+        elif isinstance(node, list):
+            for child in node:
+                visit(child)
+
+    visit(state)
+    if not isinstance(policy, dict):
+        return None, None
+    subtitles = [item for item in policy.get("subtitles") or [] if isinstance(item, str)]
+    label = subtitles[0].strip() if subtitles else None
+    modal = policy.get("cancellationMilestoneModalV2") or {}
+    entries = [item for item in modal.get("entries") or [] if isinstance(item, dict)]
+    if not entries:
+        return None, label
+    full_before = any(
+        str(item.get("refundType", "")).casefold() == "full refund"
+        and str(item.get("timelineTitle", "")).casefold() == "before"
+        for item in entries
+    )
+    return full_before, label
+
+
 def _global_id(prefix: str, raw_id: str) -> str:
     return base64.b64encode(f"{prefix}:{raw_id}".encode("ascii")).decode("ascii")
 
@@ -1087,12 +1128,13 @@ class AirbnbAdapter(HttpOnly):
             deposit=round(totals["deposit"], 2) or None,
         )
 
-        cxl = _find_key(state, "cancellationPolicy") or _find_key(state, "cancellationPolicyType")
-        cancellation_type = cxl if isinstance(cxl, str) else None
-        refundable = None
-        if cancellation_type:
-            low = cancellation_type.lower()
-            refundable = "flexible" in low or "moderate" in low or "free" in low
+        refundable, cancellation_type = _airbnb_refund_terms(state)
+        if cancellation_type is None:
+            cxl = _find_key(state, "cancellationPolicy") or _find_key(state, "cancellationPolicyType")
+            cancellation_type = cxl if isinstance(cxl, str) else None
+            if cancellation_type:
+                low = cancellation_type.lower()
+                refundable = "flexible" in low or "moderate" in low or "free" in low
 
         return PriceResult(
             site=self.site,
