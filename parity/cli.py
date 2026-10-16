@@ -1969,14 +1969,14 @@ def _cmd_app(args: argparse.Namespace) -> int:
     server = create_app_server(Path(args.work_dir), port=args.port)
     host, port = server.server_address
     url = f"http://{host}:{port}/"
-    print(f"[parity] Parity Desk running at {url}", file=sys.stderr)
+    print(f"[parity] Skopos running at {url}", file=sys.stderr)
     print("[parity] Press Ctrl+C in PowerShell to stop it.", file=sys.stderr)
     if not _open_compact_url(url):
         webbrowser.open(url)
     try:
         server.serve_forever(poll_interval=0.25)
     except KeyboardInterrupt:
-        print("\n[parity] Parity Desk stopped.", file=sys.stderr)
+        print("\n[parity] Skopos stopped.", file=sys.stderr)
     finally:
         server.server_close()
     return 0

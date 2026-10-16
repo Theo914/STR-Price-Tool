@@ -1,4 +1,4 @@
-TravelStaytion Parity Desk - Technical Handoff (Hotfix 49)
+Skopos (TravelStaytion rate parity) - Technical Handoff (Hotfix 49)
 ==========================================================
 
 This folder contains the complete current source tree, tests, fixtures,

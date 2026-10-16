@@ -1,4 +1,4 @@
-# TravelStaytion Parity Desk — technical handoff
+# Skopos (TravelStaytion rate parity) — technical handoff
 
 ## Handoff state
 

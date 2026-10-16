@@ -201,7 +201,7 @@ def test_dashboard_html_is_self_contained_and_script_safe(tmp_path):
     assert "https://" not in rendered.split("<style>", 1)[0]
     assert "\\u003c/script\\u003e" in rendered
     assert "https://cdn" not in rendered
-    assert "Parity Desk" in rendered
+    assert "Skopos" in rendered
     assert "Genius what-if" in rendered
     assert "← New check" in rendered
     assert "Export CSV" in rendered
