@@ -73,11 +73,11 @@ def test_launcher_keeps_javascript_regex_and_newline_escapes_intact():
     rendered = _launcher_html("safe-token")
 
     assert "join('\\n')" in rendered
-    assert "Check one TravelStaytion property" in rendered
+    assert "Check one TravelStaytion property" not in rendered
     assert "Up to 10" not in rendered
     assert 'id="clear"' in rendered
     assert 'id="canonical"' in rendered
-    assert "Unverified candidates are shown as review links" in rendered
+    assert "Find, verify and compare" in rendered
     assert "Technical log" in rendered
     assert "--ts:#173f35" in rendered
 

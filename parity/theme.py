@@ -48,7 +48,8 @@ option{background:#161b22;color:var(--ink)}
 pre{color:#9aa1ab!important;background:#0e1116;border:1px solid var(--line);border-radius:4px;padding:6px}
 .dot{background:var(--good)!important;box-shadow:none!important}
 .secure,.live{color:var(--muted)!important}
-.canonical{color:var(--muted)!important}
+.canonical{display:none!important}
 footer,.review-status,.promise{color:#5c636d!important}
 a{color:inherit}
+.settings{margin-top:12px}.actions{margin-top:14px!important}
 """

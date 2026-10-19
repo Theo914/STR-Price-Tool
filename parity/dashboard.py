@@ -318,12 +318,11 @@ def _render_dashboard_legacy(data: dict[str, Any]) -> str:
 </head>
 <body>
 <main class="shell">
-  <div class="top"><div class="brand">Skopia <span>· rate watch</span></div><div class="live"><i class="dot"></i>Check complete</div></div>
+  <div class="top"><div class="brand">Skopia</div><div class="live"><i class="dot"></i>Check complete</div></div>
   <nav class="toolbar"><button class="tool primary" id="back" type="button">← New check</button><a class="tool download" href="/downloads/results.csv">Export CSV</a><a class="tool download" href="/downloads/results.json">Export JSON</a></nav>
   <div class="mode" role="tablist"><button id="singleMode" class="active" type="button">Single check</button><button id="portfolioMode" type="button">Up to 10</button></div>
   <section class="picker" id="picker"><label for="listing">Choose listing</label><div class="select-wrap"><select id="listing"></select></div></section>
   <div id="app"></div>
-  <footer>Guest-visible totals · Hypothetical discounts are never presented as bookable prices</footer>
 </main>
 <script>
 const DATA={payload};
@@ -335,7 +334,7 @@ const copyButton=url=>{{if(!url)return null;const b=$('button','copy','Copy');b.
 const linkActions=url=>{{const box=$('div','row-actions');const a=link(url,'Open'),b=copyButton(url);if(a)box.append(a);if(b)box.append(b);return box}};
 function breakdown(price,currency){{
   if(!price||price.breakdown_status!=='exact'||!price.line_items.length)return null;
-  const d=$('details');d.append($('summary','',`Price breakdown · ${{price.line_items.length}} components`));
+  const d=$('details');d.append($('summary','','Price breakdown'));
   const box=$('div','breakdown');
   price.line_items.forEach(item=>{{const r=$('div','component');r.append($('span','',item.label),$('span','',money(item.amount,currency)));box.append(r)}});
   const total=$('div','component total');total.append($('span','','Guest total'),$('span','',money(price.guest_total,currency)));box.append(total);d.append(box);return d;
@@ -355,7 +354,7 @@ function discountPanel(channel,current){{
 }}
 function priceCard(channel,current){{
   const card=$('section',`card ${{channel.channel}}-card`);const head=$('div','row');const left=$('div');left.append($('div',`source ${{channel.channel}}`,channel.channel==='booking'?'Booking.com':'Airbnb'));left.append($('div',`status ${{channel.status}}`,channel.status.replaceAll('_',' ')));head.append(left);if(channel.url)head.append(linkActions(channel.url));card.append(head);
-  if(channel.status==='PRICED'&&channel.price.guest_total!=null){{card.append($('div','price',money(channel.price.guest_total,current.currency)));card.append($('div','sub','Guest total'));card.append(differenceBadge(channel.difference,channel.difference_percent,current.currency));const audit=channel.price.component_total;if(audit!=null&&audit!==channel.price.guest_total)card.append($('div','note',`Captured components excluding taxes: ${{money(audit,current.currency)}}`));const bd=breakdown(channel.price,current.currency);if(bd)card.append(bd);const others=(channel.price.rate_options||[]).filter(o=>!o.selected);if(others.length)card.append($('div','note','Other rates on this site: '+others.map(o=>`${{money(o.total,current.currency)}} ${{o.cancellation.toLowerCase()}}`).join(' · ')));const dp=discountPanel(channel,current);if(dp)card.append(dp);if(channel.terms_note)card.append($('div','warning',channel.terms_note));}}
+  if(channel.status==='PRICED'&&channel.price.guest_total!=null){{card.append($('div','price',money(channel.price.guest_total,current.currency)));card.append($('div','sub','Guest total'));card.append(differenceBadge(channel.difference,channel.difference_percent,current.currency));const bd=breakdown(channel.price,current.currency);if(bd)card.append(bd);const others=(channel.price.rate_options||[]).filter(o=>!o.selected);if(others.length)card.append($('div','note','Other rates on this site: '+others.map(o=>`${{money(o.total,current.currency)}} ${{o.cancellation.toLowerCase()}}`).join(' · ')));const dp=discountPanel(channel,current);if(dp)card.append(dp);if(channel.terms_note)card.append($('div','warning',channel.terms_note));}}
   else{{card.append($('div','empty',channel.error||channel.price.notes||'No usable guest price was captured.'))}}
   const alternatives=(channel.review_candidates||[]).filter(item=>item.url!==channel.url);if(alternatives.length){{const d=$('details');d.append($('summary','',`Other possible links · ${{alternatives.length}}`));const list=$('div','review-list');alternatives.forEach((item,index)=>{{const row=$('div','review-row'),copy=$('div','review-copy');copy.append($('div','review-name',item.title||`Possible ${{channel.channel==='booking'?'Booking.com':'Airbnb'}} match ${{index+1}}`));if(item.identity_status)copy.append($('div','review-status',item.identity_status.replaceAll('_',' ')));row.append(copy,linkActions(item.url));list.append(row)}});d.append(list);card.append(d)}}return card;
 }}
