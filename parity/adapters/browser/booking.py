@@ -54,10 +54,38 @@ _RECONCILIATION_TOLERANCE = 0.02
 _MAX_BOOKING_SOURCE_BYTES = 12 * 1024 * 1024
 
 
+# Phrases Booking uses when the requested stay cannot be booked.  Missing
+# one leaves the page "unknown" and drops Booking for the whole check (live:
+# 1024817), so the list covers the wordings seen on property pages.
+_BOOKING_UNAVAILABLE_MARKERS = (
+    "not available for your dates",
+    "no availability for your dates",
+    "no availability on our site",
+    "have no availability here",
+    "no rooms available",
+    "not available on our site",
+    "sold out on our site",
+    "no longer available",
+)
+_BOOKING_MINIMUM_STAY_RES = (
+    re.compile(r"minimum (?:length of )?stay(?: requirement)?(?: is| of)?[:\s]*(\d+)\s*nights?"),
+    re.compile(r"min\.? stay[:\s]*(\d+)\s*nights?"),
+    re.compile(r"(?:book|stay|reserve)(?: for)? at least (\d+) nights?"),
+)
+
+
+def _booking_minimum_stay_match(low: str):
+    for pattern in _BOOKING_MINIMUM_STAY_RES:
+        found = pattern.search(low)
+        if found:
+            return found
+    return None
+
+
 _BOOKING_RATES_READY_JS = """() => {
     if (document.querySelector('#hprt-table, .hprt-table, [data-component="hotel/new-rooms-table/HprtTable"]')) return true;
     const text = (document.body && document.body.innerText) || '';
-    return /not available for your dates|no availability for your dates|sold out on our site|no longer available|minimum (length of )?stay/i.test(text);
+    return /not available for your dates|no availability for your dates|no availability on our site|have no availability here|no rooms available|not available on our site|sold out on our site|no longer available|minimum (length of )?stay|min\\.? stay|at least \\d+ nights/i.test(text);
 }"""
 
 
@@ -1027,20 +1055,12 @@ def _capture_booking_pricing_snapshot(
     outcome_detail = None
     availability_outcome_signal = None
     minimum_stay_nights = None
-    if any(marker in low for marker in (
-        "not available for your dates",
-        "no availability for your dates",
-        "sold out on our site",
-        "no longer available",
-    )):
+    if any(marker in low for marker in _BOOKING_UNAVAILABLE_MARKERS):
         outcome = "unavailable"
         outcome_detail = "Booking checkout page reports unavailable"
         availability_outcome_signal = "body_text_unavailable_marker"
     else:
-        minimum_match = re.search(
-            r"minimum (?:length of )?stay(?: is| of)?\s*(\d+)\s*nights?",
-            low,
-        )
+        minimum_match = _booking_minimum_stay_match(low)
         if minimum_match:
             outcome = "min_stay"
             minimum_stay_nights = int(minimum_match.group(1))

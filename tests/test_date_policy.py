@@ -500,3 +500,35 @@ def test_closed_travelstaytion_calendar_stops_shared_selection_plainly():
             ClosedCalendar(), None, windows, today, 30, fail_when_closed=True
         )
     assert _calendar_preferred_windows(ClosedCalendar(), None, windows, today, 30) == windows
+
+
+def test_unclear_answer_on_one_window_tries_the_next_window_before_dropping():
+    """Live 1024817: Booking was unclear on window 1/8 and dropped at once."""
+    from parity.core.date_policy import DateWindow, select_multi_channel_minimum_stay_window
+
+    def result(site, window, outcome):
+        return PriceResult(
+            site=site, ref=PropertyRef(site=site, raw_id="1", url="u"), outcome=outcome,
+            checkin=window.checkin, checkout=window.checkout, guests=2,
+            comparable_total=100.0 if outcome == Outcome.PRICED else None,
+        )
+
+    windows = [
+        DateWindow(date(2026, 11, 30), date(2026, 12, 1)),
+        DateWindow(date(2026, 12, 7), date(2026, 12, 8)),
+    ]
+    booking_calls = []
+
+    def booking(w):
+        booking_calls.append(w)
+        return result("booking", w, Outcome.ERROR if w == windows[0] else Outcome.PRICED)
+
+    selection = select_multi_channel_minimum_stay_window(
+        windows,
+        lambda w: result("travelstaytion", w, Outcome.PRICED),
+        [("booking", booking), ("airbnb", lambda w: result("airbnb", w, Outcome.PRICED))],
+    )
+    assert selection.window == windows[1]
+    assert set(selection.candidate_prices) == {"booking", "airbnb"}
+    assert selection.dropped == {}
+    assert booking_calls == windows

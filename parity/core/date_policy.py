@@ -15,6 +15,10 @@ DEFAULT_SEARCH_WEEKS = 8
 MONDAY = 0
 
 
+# Extra windows a channel may use after an unclear (not priced, not
+# unavailable) answer before it is dropped from the comparison.
+UNCERTAIN_WINDOW_RETRIES = 2
+
 @dataclass(frozen=True)
 class DateWindow:
     checkin: date
@@ -303,6 +307,7 @@ def select_multi_channel_minimum_stay_window(
     probes: list[MinimumStayProbe] = []
     active = list(candidate_probes)
     dropped: dict[str, str] = {}
+    strikes: dict[str, int] = {}
 
     def record(index: int, result: PriceResult) -> None:
         probes.append(MinimumStayProbe(
@@ -382,9 +387,16 @@ def select_multi_channel_minimum_stay_window(
                     restart = True
                     break
                 if candidate.outcome != Outcome.PRICED:
+                    detail = f": {candidate.notes}" if candidate.notes else ""
+                    # An unclear page on one date (live: a Booking wording the
+                    # parser did not recognise) is often fine on another, so a
+                    # channel gets UNCERTAIN_WINDOW_RETRIES more windows first.
+                    strikes[label] = strikes.get(label, 0) + 1
+                    if strikes[label] <= UNCERTAIN_WINDOW_RETRIES and index < len(windows):
+                        unavailable = True
+                        break
                     # One channel's uncertain failure must not void the others:
                     # drop it with its reason and re-check this window without it.
-                    detail = f": {candidate.notes}" if candidate.notes else ""
                     dropped[label] = (
                         f"{candidate.site} stopped on window {index}/{len(windows)} "
                         f"with {candidate.outcome.value}{detail}"

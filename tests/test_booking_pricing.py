@@ -1280,3 +1280,31 @@ def test_percentage_tourism_fee_is_a_tax_not_an_unknown_line(ref, label):
     assert result.outcome == Outcome.PRICED
     assert result.breakdown.tourist_tax == 60.0
     assert result.comparable_total == 2150.0
+
+
+@pytest.mark.parametrize("body, outcome, minimum", [
+    ("Unfortunately, this property has no availability on our site for your dates.", "unavailable", None),
+    ("We have no availability here between Sun 30 Nov and Tue 2 Dec", "unavailable", None),
+    ("There are no rooms available for your dates", "unavailable", None),
+    ("This property requires a minimum stay: 3 nights", "min_stay", 3),
+    ("Min. stay 5 nights", "min_stay", 5),
+    ("You need to book at least 4 nights at this property", "min_stay", 4),
+])
+def test_booking_recognises_other_unavailable_and_minimum_stay_wordings(ref, body, outcome, minimum):
+    # Live (1024817): an unrecognised wording left the page "unknown" and
+    # dropped Booking from the whole check.
+    from parity.adapters.browser.booking import _BookingSourceOnlyPage
+
+    snapshot = _capture_booking_pricing_snapshot(
+        _BookingSourceOnlyPage(),
+        ref=ref,
+        quote_url=booking_quote_url(ref, CHECKIN, CHECKOUT, 2, "EUR"),
+        checkin=CHECKIN,
+        checkout=CHECKOUT,
+        guests=2,
+        currency="EUR",
+        body_text=body,
+        source_text="",
+    )
+    assert snapshot["outcome"] == outcome
+    assert snapshot.get("minimum_stay_nights") == minimum
