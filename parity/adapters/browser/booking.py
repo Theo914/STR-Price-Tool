@@ -74,6 +74,44 @@ _BOOKING_MINIMUM_STAY_RES = (
 )
 
 
+_EXCERPT_KEYWORDS = (
+    "availab", "sold out", "minimum", "min. stay", "no rooms", "select dates",
+    "check-in date", "enter your dates", "reserve", "price",
+)
+
+
+def _booking_page_excerpt(body_text: str, width: int = 240) -> str:
+    """A short slice of what Booking's page said, for plain error messages."""
+    text = " ".join(str(body_text or "").split())
+    if not text:
+        return ""
+    low = text.casefold()
+    hits = [low.find(word) for word in _EXCERPT_KEYWORDS if low.find(word) >= 0]
+    start = max(0, min(hits) - 60) if hits else 0
+    return text[start:start + width]
+
+
+def _unclear_booking_page_message(snapshot: dict) -> str:
+    diagnostics = snapshot.get("diagnostics") or {}
+    rates = diagnostics.get("structured_rate_count")
+    rows = diagnostics.get("availability_rows")
+    reasons = diagnostics.get("structured_rejection_reasons") or []
+    excerpt = str(diagnostics.get("page_excerpt") or "").strip()
+    parts = ["Booking checkout snapshot has no supported availability outcome"]
+    details = []
+    if isinstance(rates, int):
+        details.append(f"rates read: {rates}")
+    if isinstance(rows, list):
+        details.append(f"room rows: {len(rows)}")
+    if reasons:
+        details.append(f"why: {reasons[0]}")
+    if details:
+        parts.append("(" + "; ".join(details) + ")")
+    if excerpt:
+        parts.append(f"— page said: \"{excerpt[:200]}\"")
+    return " ".join(parts)
+
+
 def _booking_minimum_stay_match(low: str):
     for pattern in _BOOKING_MINIMUM_STAY_RES:
         found = pattern.search(low)
@@ -667,7 +705,7 @@ def parse_booking_pricing_snapshot(
         if diagnostic_result is not None:
             return diagnostic_result
     if outcome != "available":
-        return error("Booking checkout snapshot has no supported availability outcome")
+        return error(_unclear_booking_page_message(snapshot))
 
     displayed_total = _strict_amount(snapshot.get("displayed_total"))
     if displayed_total is None or displayed_total < 0:
@@ -1684,6 +1722,7 @@ def _capture_booking_pricing_snapshot(
         "diagnostics": {
             "capture_version": 5,
             "availability_outcome_signal": availability_outcome_signal,
+            "page_excerpt": _booking_page_excerpt(body_text),
             "pricing_extraction_route": (
                 "navigation_response"
                 if source_capture.get("rates")

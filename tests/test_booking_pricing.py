@@ -1308,3 +1308,19 @@ def test_booking_recognises_other_unavailable_and_minimum_stay_wordings(ref, bod
     )
     assert snapshot["outcome"] == outcome
     assert snapshot.get("minimum_stay_nights") == minimum
+
+
+def test_unclear_booking_page_error_quotes_what_the_page_said(ref):
+    from parity.adapters.browser.booking import _booking_page_excerpt
+
+    snapshot = _snapshot(ref)
+    snapshot.update({"outcome": "unknown", "displayed_total": None, "line_items": [], "diagnostics": {
+        "structured_rate_count": 3,
+        "availability_rows": [],
+        "structured_rejection_reasons": ["rate selection failed: expected exactly one flexible rate or one total rate"],
+        "page_excerpt": _booking_page_excerpt("Menu Home Studio apartment Select your room Availability Please select dates"),
+    }})
+    result = _parse(ref, snapshot)
+    assert "rates read: 3" in result.notes
+    assert "expected exactly one flexible rate" in result.notes
+    assert 'page said: "' in result.notes and "Availability" in result.notes

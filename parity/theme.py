@@ -51,5 +51,10 @@ pre{color:#9aa1ab!important;background:#0e1116;border:1px solid var(--line);bord
 .canonical{display:none!important}
 footer,.review-status,.promise{color:#5c636d!important}
 a{color:inherit}
-.settings{margin-top:12px}.actions{margin-top:14px!important}
+.settings{margin-top:12px}
+body{font-size:12px!important}.shell{padding:8px 10px!important}
+.card{padding:9px 10px!important;margin-bottom:6px!important}.panel{padding:11px!important}
+.price{font-size:19px!important;margin:3px 0 1px!important}.brand{font-size:16px!important}
+.top{margin-bottom:6px!important}.toolbar{margin-bottom:6px!important}.meta{margin:4px 1px 6px!important}
+input,select{padding:7px 9px!important}.run,.clear{padding:8px!important}.actions{margin-top:14px!important}
 """

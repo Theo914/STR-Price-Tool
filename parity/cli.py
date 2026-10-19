@@ -1953,7 +1953,7 @@ def _open_compact_url(url: str) -> bool:
         [
             str(edge),
             f"--app={url}",
-            "--window-size=540,760",
+            "--window-size=420,640",
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -1965,8 +1965,19 @@ def _open_compact_dashboard(output_path: Path) -> bool:
     return _open_compact_url(output_path.resolve().as_uri())
 
 
+APP_DEFAULT_PORT = 8765
+
+
 def _cmd_app(args: argparse.Namespace) -> int:
-    server = create_app_server(Path(args.work_dir), port=args.port)
+    # A fixed address lets Edge remember the window size and position the
+    # user last chose; fall back to any free port if it is taken.
+    port = args.port if args.port is not None else APP_DEFAULT_PORT
+    try:
+        server = create_app_server(Path(args.work_dir), port=port)
+    except OSError:
+        if args.port is not None:
+            raise
+        server = create_app_server(Path(args.work_dir), port=0)
     host, port = server.server_address
     url = f"http://{host}:{port}/"
     print(f"[parity] Skopia running at {url}", file=sys.stderr)
@@ -2173,8 +2184,8 @@ def main(argv: list[str] | None = None) -> int:
     p_app.add_argument(
         "--port",
         type=int,
-        default=0,
-        help="Localhost port; 0 selects an available port automatically",
+        default=None,
+        help="Localhost port (default 8765, or any free port if that is taken)",
     )
     p_app.set_defaults(func=_cmd_app)
 
