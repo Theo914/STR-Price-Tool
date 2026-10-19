@@ -142,3 +142,9 @@ def test_midnight_theme_is_applied_to_launcher():
     page = _launcher_html("token")
     assert MIDNIGHT_CSS in page
     assert page.index(MIDNIGHT_CSS) < page.index("</style>")
+
+
+def test_launcher_shrinks_an_oversized_app_window():
+    from parity.app import _launcher_html
+
+    assert "window.resizeTo(440,680)" in _launcher_html("token")

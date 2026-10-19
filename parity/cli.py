@@ -1949,11 +1949,21 @@ def _open_compact_url(url: str) -> bool:
     edge = next((path for path in candidates if path.is_file()), None)
     if edge is None:
         return False
+    # A dedicated Edge profile starts its own process.  Without it a running
+    # Edge (Windows keeps one in the background) takes the request and
+    # ignores --window-size, so the app opened full size every time.  The
+    # profile also remembers the size/position the user last chose.
+    profile = Path(
+        os.environ.get("LOCALAPPDATA") or Path.home()
+    ) / "Skopia" / "edge-app-profile"
     subprocess.Popen(
         [
             str(edge),
             f"--app={url}",
+            f"--user-data-dir={profile}",
             "--window-size=420,640",
+            "--no-first-run",
+            "--no-default-browser-check",
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

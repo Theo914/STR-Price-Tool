@@ -1,6 +1,6 @@
 Skopia — TravelStaytion rate parity
 Technical handoff release: Hotfix 49
 Prepared: 14 October 2026
-Expected regression suite: 400 passed
+Expected regression suite: 401 passed
 Primary workflow: single TravelStaytion listing search
 
