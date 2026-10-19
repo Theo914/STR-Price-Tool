@@ -1386,3 +1386,13 @@ def test_identical_villas_in_a_complex_are_told_apart_by_unit_number():
     assert _unit_numbers("Villa 200 m²") == set()
     assert _unit_numbers("I love this villa") == set()
     assert _unit_numbers("Apartment 3, sleeps 6 guests") == {3}
+
+
+@pytest.mark.parametrize("label", ["Environment fee", "Climate resilience fee", "Ecotax"])
+def test_greek_environment_fee_is_a_tax(ref, label):
+    # Live 1024817 (Sivota, Greece): Booking itemised "Environment fee".
+    snapshot = _snapshot(ref)
+    snapshot["line_items"][3]["label"] = label
+    result = _parse(ref, snapshot)
+    assert result.outcome == Outcome.PRICED
+    assert result.breakdown.tourist_tax == 60.0
