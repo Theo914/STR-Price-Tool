@@ -65,7 +65,7 @@ def test_compare_aligned_prices_preserves_refundability_difference_as_note():
     assert comparison.candidate_minus_subject == -10
     assert comparison.refundability_note == (
         "Cancellation terms differ: travelstaytion is refundable; "
-        "booking is non-refundable."
+        "booking is not fully refundable."
     )
 
 

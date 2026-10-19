@@ -161,8 +161,8 @@ def compare_aligned_prices(
             f"{', '.join(missing)}; guest-visible prices are still compared."
         )
     elif subject.refundable != candidate.refundable:
-        subject_terms = "refundable" if subject.refundable else "non-refundable"
-        candidate_terms = "refundable" if candidate.refundable else "non-refundable"
+        subject_terms = "refundable" if subject.refundable else "not fully refundable"
+        candidate_terms = "refundable" if candidate.refundable else "not fully refundable"
         refundability_note = (
             "Cancellation terms differ: "
             f"{subject.site} is {subject_terms}; "
