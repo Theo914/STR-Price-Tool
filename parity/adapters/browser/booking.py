@@ -601,7 +601,47 @@ _GENERIC_ROOM_WORDS = {
     "villa", "apartment", "house", "room", "rooms", "bedroom", "bedrooms", "with",
     "and", "the", "view", "suite", "studio", "deluxe", "superior", "standard",
     "family", "private", "pool", "sea", "garden", "balcony", "terrace", "home",
+    "villas", "apartments", "suites", "houses", "homes", "entire", "exquisite",
+    "luxury", "luxurious",
 }
+_ROMAN_UNITS = {
+    "i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8,
+    "ix": 9, "x": 10, "xi": 11, "xii": 12,
+}
+
+
+_UNIT_NOUNS = {
+    "villa", "villas", "apartment", "apartments", "apt", "house", "houses", "unit",
+    "no", "number", "suite", "studio", "room", "home", "residence", "cottage",
+    "loft", "maisonette", "bungalow", "chalet",
+}
+
+
+def _unit_numbers(text: str) -> set[int]:
+    """Unit designators such as 'Villa II', 'Apartment 3', 'No. 4'.
+
+    Numbers that are sizes or counts (200 m², 3 bedrooms, 6 guests) are not
+    unit numbers and are ignored.
+    """
+    units: set[int] = set()
+    tokens = re.findall(r"[A-Za-z]+|\d+|[²]", str(text or ""))
+    for index, token in enumerate(tokens):
+        following = tokens[index + 1].casefold() if index + 1 < len(tokens) else ""
+        if token.isascii() and token.isdigit():
+            previous = tokens[index - 1].casefold() if index else ""
+            # A plain number counts only right after a unit word or at the
+            # very end ("Apartment 3", "Villa No 4", "Sea View Suite 2"), so
+            # "2 pools" or "200 m²" never look like unit numbers.
+            if len(token) <= 2 and (
+                previous in _UNIT_NOUNS or index == len(tokens) - 1
+            ) and following not in {"m", "sqm", "²"}:
+                units.add(int(token))
+        elif token.isupper() and token.casefold() in _ROMAN_UNITS:
+            # Only upper-case Roman numerals ("II"), never the word "I"
+            # mid-sentence or lower-case letters.
+            if token != "I" or index > 0:
+                units.add(_ROMAN_UNITS[token.casefold()])
+    return units
 
 
 def _booking_room_id(block_id: str) -> str:
@@ -642,6 +682,7 @@ def choose_booking_room(
         word for word in re.findall(r"[a-zα-ω]{4,}", str(profile.get("title") or "").casefold())
         if word not in _GENERIC_ROOM_WORDS
     }
+    subject_units = _unit_numbers(str(profile.get("title") or ""))
     scored = []
     for room_id, room_rates in groups.items():
         if not room_id:
@@ -660,6 +701,12 @@ def choose_booking_room(
                 score += 2 if max_persons == capacity else (-1 if abs(max_persons - capacity) > 2 else 0)
         name_words = set(re.findall(r"[a-zα-ω]{4,}", name.casefold())) - _GENERIC_ROOM_WORDS
         score += min(2, len(title_words & name_words))
+        # Identical units in one complex ("Villa I / II / III") differ only
+        # by their number, so a matching unit number decides (live 1024817:
+        # "Syvana Exquisite Villas II" -> "Syvana Villa II").
+        room_units = _unit_numbers(name)
+        if subject_units and room_units:
+            score += 4 if subject_units & room_units else -4
         scored.append((score, room_id, name, room_rates))
     scored.sort(key=lambda item: item[0], reverse=True)
     best, runner_up = scored[0], scored[1]

@@ -1362,3 +1362,27 @@ def test_single_room_page_keeps_every_rate():
     rates = [_room_rate("111", "1", 900.0, "free_cancellation"), _room_rate("111", "2", 810.0, "non_refundable")]
     choice = choose_booking_room(rates, {"111": {"name": "Villa", "max_persons": 6}}, None, 2)
     assert choice["rates"] == rates and choice["problem"] == ""
+
+
+def test_identical_villas_in_a_complex_are_told_apart_by_unit_number():
+    # Live 1024817: "Syvana Exquisite Villas II" vs Booking's Syvana Villa I/II/III,
+    # all 200 m², 3 bedrooms, 6 guests.
+    from parity.adapters.browser.booking import _unit_numbers, choose_booking_room
+
+    rates = [_room_rate(room, "1", total, "free_cancellation")
+             for room, total in (("111", 1000.0), ("222", 1100.0), ("333", 1200.0))]
+    rooms = {
+        "111": {"name": "Syvana Villa I 200 m² • Entire villa", "max_persons": 6},
+        "222": {"name": "Syvana Villa II 200 m² • Entire villa", "max_persons": 6},
+        "333": {"name": "Syvana Villa III 200 m² • Entire villa", "max_persons": 6},
+    }
+    choice = choose_booking_room(
+        rates, rooms, {"bedrooms": 3, "capacity": 6, "title": "Syvana Exquisite Villas II"}, 2
+    )
+    assert choice["name"].startswith("Syvana Villa II ")
+    assert [rate["total"] for rate in choice["rates"]] == [1100.0]
+
+    assert _unit_numbers("Three-Bedroom Villa with 2 pools") == set()
+    assert _unit_numbers("Villa 200 m²") == set()
+    assert _unit_numbers("I love this villa") == set()
+    assert _unit_numbers("Apartment 3, sleeps 6 guests") == {3}
