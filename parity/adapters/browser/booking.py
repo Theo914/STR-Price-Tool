@@ -589,6 +589,98 @@ def _diagnostic_booking_rate(
     )
 
 
+_NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+}
+_ROOM_BEDROOMS_RE = re.compile(
+    r"\b(one|two|three|four|five|six|seven|eight|nine|ten|\d{1,2})[\s-]*bed(?:room)?s?\b",
+    re.IGNORECASE,
+)
+_GENERIC_ROOM_WORDS = {
+    "villa", "apartment", "house", "room", "rooms", "bedroom", "bedrooms", "with",
+    "and", "the", "view", "suite", "studio", "deluxe", "superior", "standard",
+    "family", "private", "pool", "sea", "garden", "balcony", "terrace", "home",
+}
+
+
+def _booking_room_id(block_id: str) -> str:
+    head = str(block_id or "").split("_", 1)[0]
+    return head if head.isdigit() else ""
+
+
+def _room_bedrooms(name: str) -> int | None:
+    found = _ROOM_BEDROOMS_RE.search(name or "")
+    if not found:
+        return 0 if re.search(r"\bstudio\b", name or "", re.IGNORECASE) else None
+    token = found.group(1).casefold()
+    return _NUMBER_WORDS.get(token) or (int(token) if token.isdigit() else None)
+
+
+def choose_booking_room(
+    rates: list[dict], room_info: dict[str, dict], profile, guests: int
+) -> dict:
+    """Narrow Booking rates to the one room type that matches the subject.
+
+    One room on the page: all rates, unchanged.  Several rooms: score each by
+    bedroom count in its name, maximum guests and distinctive title words
+    against the TravelStaytion listing; only a clear winner is used.  Ties or
+    no evidence return no rates and a plain reason listing the room names.
+    """
+    groups: dict[str, list[dict]] = {}
+    for rate in rates:
+        groups.setdefault(_booking_room_id(str(rate.get("block_id") or "")), []).append(rate)
+    known = [room_id for room_id in groups if room_id]
+    if len(known) <= 1:
+        only = known[0] if known else ""
+        return {"rates": list(rates), "name": (room_info.get(only) or {}).get("name") or "", "problem": ""}
+
+    profile = profile if isinstance(profile, dict) else {}
+    bedrooms = profile.get("bedrooms")
+    capacity = profile.get("capacity")
+    title_words = {
+        word for word in re.findall(r"[a-zα-ω]{4,}", str(profile.get("title") or "").casefold())
+        if word not in _GENERIC_ROOM_WORDS
+    }
+    scored = []
+    for room_id, room_rates in groups.items():
+        if not room_id:
+            continue
+        info = room_info.get(room_id) or {}
+        name = str(info.get("name") or "")
+        max_persons = info.get("max_persons")
+        score = 0
+        room_bedrooms = _room_bedrooms(name)
+        if isinstance(bedrooms, int) and bedrooms > 0 and room_bedrooms is not None:
+            score += 3 if room_bedrooms == bedrooms else -3
+        if isinstance(max_persons, int) and max_persons:
+            if max_persons < guests:
+                score -= 5
+            elif isinstance(capacity, int) and capacity > 0:
+                score += 2 if max_persons == capacity else (-1 if abs(max_persons - capacity) > 2 else 0)
+        name_words = set(re.findall(r"[a-zα-ω]{4,}", name.casefold())) - _GENERIC_ROOM_WORDS
+        score += min(2, len(title_words & name_words))
+        scored.append((score, room_id, name, room_rates))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    best, runner_up = scored[0], scored[1]
+    if best[0] > 0 and best[0] > runner_up[0]:
+        return {"rates": best[3], "name": best[2], "problem": ""}
+    names = "; ".join(item[2] or f"room {item[1]}" for item in scored[:6])
+    wanted = []
+    if isinstance(bedrooms, int) and bedrooms > 0:
+        wanted.append(f"{bedrooms} bedrooms")
+    if isinstance(capacity, int) and capacity > 0:
+        wanted.append(f"{capacity} guests")
+    return {
+        "rates": [],
+        "name": "",
+        "problem": (
+            f"Booking lists {len(groups)} room types ({names}) and none clearly "
+            "matches this listing" + (f" ({', '.join(wanted)})" if wanted else "")
+        ),
+    }
+
+
 def booking_rate_options(rates: list[dict], selected: dict | None) -> list[dict]:
     """All distinct rates on the page, cheapest first, selected one marked.
 
@@ -819,6 +911,7 @@ def parse_booking_pricing_snapshot(
         source_url=source_url,
         notes="Booking structured rate arithmetic reconciled from explicit component lines",
         rate_options=_valid_rate_options(snapshot.get("rate_options")),
+        room_name=(str(snapshot.get("room_name") or "").strip()[:160] or None),
     )
 
 
@@ -1202,10 +1295,23 @@ def _capture_booking_pricing_snapshot(
                         });
                     }
                 }
+                let currentRoomName = '';
                 for (const row of Array.from(document.querySelectorAll(
                         '#hprt-table tr, .hprt-table tr')).slice(0, 40)) {
+                    // The room-type cell spans all rate rows of that room, so
+                    // carry its name forward to the rows below it.
+                    const roomNameEl = row.querySelector(
+                        '.hprt-roomtype-icon-link, .hprt-roomtype-link, .hprt-roomtype-name');
+                    if (roomNameEl) currentRoomName = (roomNameEl.innerText
+                        || roomNameEl.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 160);
                     const select = row.querySelector('select[name^="nr_rooms_"]');
                     if (!select) continue;
+                    const occupancyEl = row.querySelector(
+                        '.hprt-occupancy-occupancy-info, [class*="occupancy"]');
+                    const occupancyText = occupancyEl
+                        ? (occupancyEl.innerText || occupancyEl.textContent || '') : '';
+                    const occupancyMatch = occupancyText.match(/(\\d{1,2})/);
+                    const maxPersons = occupancyMatch ? Number(occupancyMatch[1]) : null;
                     const name = select.getAttribute('name') || '';
                     const blockId = name.startsWith('nr_rooms_')
                         ? name.slice('nr_rooms_'.length, 'nr_rooms_'.length + 120) : '';
@@ -1238,6 +1344,8 @@ def _capture_booking_pricing_snapshot(
                         cancellation_type: cancellationType,
                         text,
                         rounded_total: Number.isFinite(roundedTotal) ? roundedTotal : null,
+                        room_name: currentRoomName,
+                        max_persons: Number.isFinite(maxPersons) ? maxPersons : null,
                     });
                 }
                 return {legacy_keys: legacyKeys, rates, rate_displays: rateDisplays};
@@ -1282,10 +1390,19 @@ def _capture_booking_pricing_snapshot(
         *(source_capture.get("rate_displays") or []),
     ]
     seen_rate_displays = set()
+    room_info: dict[str, dict] = {}
     for item in raw_displays[:40]:
         if not isinstance(item, dict):
             continue
         block_id = str(item.get("block_id") or "")[:120]
+        room_id = _booking_room_id(block_id)
+        room_name = " ".join(str(item.get("room_name") or "").split())[:160]
+        max_persons = item.get("max_persons")
+        if room_id and (room_name or isinstance(max_persons, int)):
+            info = room_info.setdefault(room_id, {"name": "", "max_persons": None})
+            info["name"] = info["name"] or room_name
+            if isinstance(max_persons, int) and not isinstance(max_persons, bool):
+                info["max_persons"] = max(info["max_persons"] or 0, max_persons)
         text = " ".join(str(item.get("text") or "").split())[:2000]
         rounded_total = _strict_amount(item.get("rounded_total"))
         if block_id and (text or rounded_total is not None):
@@ -1350,14 +1467,21 @@ def _capture_booking_pricing_snapshot(
             rate["cancellation_type"] = matched_display["cancellation_type"]
 
     selected_rate = None
+    # Complexes list several room types (live 1024817: 5 rates in 7 rows).
+    # Pick the room that matches the TravelStaytion listing, then choose a
+    # rate inside that room only; never mix rooms.
+    room_choice = choose_booking_room(
+        structured_rates, room_info, ref.extra.get("subject_profile"), guests
+    )
+    room_rates = room_choice["rates"]
     flexible_rates = [
-        item for item in structured_rates
+        item for item in room_rates
         if "free_cancellation" in str(item.get("cancellation_type") or "").casefold()
     ]
     if len(flexible_rates) == 1:
         selected_rate = flexible_rates[0]
-    elif len(structured_rates) == 1:
-        selected_rate = structured_rates[0]
+    elif len(room_rates) == 1:
+        selected_rate = room_rates[0]
 
     structured_line_items = []
     structured_total = None
@@ -1368,7 +1492,8 @@ def _capture_booking_pricing_snapshot(
     structured_rejection_reasons: list[str] = []
     if selected_rate is None and outcome == "unknown":
         structured_rejection_reasons.append(
-            "rate selection failed: expected exactly one flexible rate or one total rate"
+            room_choice["problem"]
+            or "rate selection failed: expected exactly one flexible rate or one total rate"
         )
     if selected_rate is not None and outcome == "unknown":
         total = _embedded_booking_amount(selected_rate.get("total"))
@@ -1713,7 +1838,8 @@ def _capture_booking_pricing_snapshot(
         "line_items": structured_line_items if structured_total is not None else [],
         "refundable": structured_refundable,
         "cancellation_type": structured_cancellation,
-        "rate_options": booking_rate_options(structured_rates, selected_rate),
+        "rate_options": booking_rate_options(room_rates, selected_rate),
+        "room_name": room_choice["name"],
         "evidence_source": (
             "embedded_public_booking_price_breakdown"
             if structured_total is not None

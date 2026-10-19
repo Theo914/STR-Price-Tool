@@ -494,6 +494,8 @@ def _select_portfolio_shared_minimum(
 
     with _http_client(shared_args) as client:
         subject_adapter = get_http_adapter(subject.site, client=client)
+        if "booking" in candidates:
+            _attach_subject_profile(subject_adapter, subject, candidates["booking"])
         windows = _calendar_preferred_windows(
             subject_adapter, subject, windows, today, args.min_lead_days,
             fail_when_closed=True,
@@ -1427,6 +1429,24 @@ def _cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def _attach_subject_profile(subject_adapter, subject: PropertyRef, candidate: PropertyRef) -> None:
+    """Give a Booking quote the subject's room facts so it can pick the right
+    room type on a multi-room property page (live 1024817)."""
+    try:
+        full = subject_adapter.identify(subject.url)
+    except (OfflineFixtureError, RequestDeferred):
+        raise
+    except Exception as error:
+        print(f"[parity] could not read listing details for room matching ({error})", file=sys.stderr)
+        return
+    candidate.extra["subject_profile"] = {
+        "bedrooms": full.bedrooms,
+        "capacity": full.capacity,
+        "bathrooms": full.bathrooms,
+        "title": full.title,
+    }
+
+
 def _travelstaytion_subject_ref(url: str) -> PropertyRef:
     _, url = normalise_travelstaytion_listing(url)
     match = resolve(url)
@@ -1590,6 +1610,8 @@ def _cmd_quote(args: argparse.Namespace) -> int:
                 search_weeks=args.auto_date_search_weeks,
             )
             subject_adapter = get_http_adapter(subject.site, client=client)
+            if candidate.site == "booking":
+                _attach_subject_profile(subject_adapter, subject, candidate)
             windows = _calendar_preferred_windows(
                 subject_adapter, subject, windows, today, args.min_lead_days,
                 fail_when_closed=True,

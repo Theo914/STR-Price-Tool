@@ -1324,3 +1324,41 @@ def test_unclear_booking_page_error_quotes_what_the_page_said(ref):
     assert "rates read: 3" in result.notes
     assert "expected exactly one flexible rate" in result.notes
     assert 'page said: "' in result.notes and "Availability" in result.notes
+
+
+def _room_rate(room_id, block, total, terms):
+    return {"block_id": f"{room_id}_{block}_2_0_0", "total": total, "cancellation_type": terms}
+
+
+def test_multi_room_page_picks_the_room_matching_the_listing():
+    # Live 1024817: a Sivota villa complex listed 5 rates over several rooms.
+    from parity.adapters.browser.booking import choose_booking_room
+
+    rates = [
+        _room_rate("111", "1", 900.0, "free_cancellation"),
+        _room_rate("111", "2", 810.0, "non_refundable"),
+        _room_rate("222", "1", 1500.0, "free_cancellation"),
+        _room_rate("222", "2", 1350.0, "non_refundable"),
+        _room_rate("333", "1", 2100.0, "free_cancellation"),
+    ]
+    rooms = {
+        "111": {"name": "One-Bedroom Villa with Private Pool", "max_persons": 2},
+        "222": {"name": "Three-Bedroom Villa with Sea View", "max_persons": 6},
+        "333": {"name": "Five-Bedroom Villa", "max_persons": 10},
+    }
+    choice = choose_booking_room(rates, rooms, {"bedrooms": 3, "capacity": 6, "title": "Syvota Bay Villa"}, 2)
+    assert choice["name"] == "Three-Bedroom Villa with Sea View"
+    assert [rate["total"] for rate in choice["rates"]] == [1500.0, 1350.0]
+
+    unclear = choose_booking_room(rates, rooms, {}, 2)
+    assert unclear["rates"] == []
+    assert "Booking lists 3 room types" in unclear["problem"]
+    assert "Three-Bedroom Villa with Sea View" in unclear["problem"]
+
+
+def test_single_room_page_keeps_every_rate():
+    from parity.adapters.browser.booking import choose_booking_room
+
+    rates = [_room_rate("111", "1", 900.0, "free_cancellation"), _room_rate("111", "2", 810.0, "non_refundable")]
+    choice = choose_booking_room(rates, {"111": {"name": "Villa", "max_persons": 6}}, None, 2)
+    assert choice["rates"] == rates and choice["problem"] == ""

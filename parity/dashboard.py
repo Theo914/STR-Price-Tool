@@ -96,6 +96,7 @@ def _price_view(price: object, *, fallback_total: object = None) -> dict[str, An
         "cancellation_type": source.get("cancellation_type")
         if isinstance(source.get("cancellation_type"), str) else None,
         "notes": source.get("notes") if isinstance(source.get("notes"), str) else None,
+        "room_name": str(source.get("room_name"))[:160] if isinstance(source.get("room_name"), str) else None,
         "rate_options": [
             {
                 "total": _money_value(item.get("total")),
@@ -354,7 +355,7 @@ function discountPanel(channel,current){{
 }}
 function priceCard(channel,current){{
   const card=$('section',`card ${{channel.channel}}-card`);const head=$('div','row');const left=$('div');left.append($('div',`source ${{channel.channel}}`,channel.channel==='booking'?'Booking.com':'Airbnb'));left.append($('div',`status ${{channel.status}}`,channel.status.replaceAll('_',' ')));head.append(left);if(channel.url)head.append(linkActions(channel.url));card.append(head);
-  if(channel.status==='PRICED'&&channel.price.guest_total!=null){{card.append($('div','price',money(channel.price.guest_total,current.currency)));card.append($('div','sub','Guest total'));card.append(differenceBadge(channel.difference,channel.difference_percent,current.currency));const bd=breakdown(channel.price,current.currency);if(bd)card.append(bd);const others=(channel.price.rate_options||[]).filter(o=>!o.selected);if(others.length)card.append($('div','note','Other rates on this site: '+others.map(o=>`${{money(o.total,current.currency)}} ${{o.cancellation.toLowerCase()}}`).join(' · ')));const dp=discountPanel(channel,current);if(dp)card.append(dp);if(channel.terms_note)card.append($('div','warning',channel.terms_note));}}
+  if(channel.status==='PRICED'&&channel.price.guest_total!=null){{card.append($('div','price',money(channel.price.guest_total,current.currency)));card.append($('div','sub','Guest total'));card.append(differenceBadge(channel.difference,channel.difference_percent,current.currency));if(channel.price.room_name)card.append($('div','note','Room compared: '+channel.price.room_name));const bd=breakdown(channel.price,current.currency);if(bd)card.append(bd);const others=(channel.price.rate_options||[]).filter(o=>!o.selected);if(others.length)card.append($('div','note','Other rates on this site: '+others.map(o=>`${{money(o.total,current.currency)}} ${{o.cancellation.toLowerCase()}}`).join(' · ')));const dp=discountPanel(channel,current);if(dp)card.append(dp);if(channel.terms_note)card.append($('div','warning',channel.terms_note));}}
   else{{card.append($('div','empty',channel.error||channel.price.notes||'No usable guest price was captured.'))}}
   const alternatives=(channel.review_candidates||[]).filter(item=>item.url!==channel.url);if(alternatives.length){{const d=$('details');d.append($('summary','',`Other possible links · ${{alternatives.length}}`));const list=$('div','review-list');alternatives.forEach((item,index)=>{{const row=$('div','review-row'),copy=$('div','review-copy');copy.append($('div','review-name',item.title||`Possible ${{channel.channel==='booking'?'Booking.com':'Airbnb'}} match ${{index+1}}`));if(item.identity_status)copy.append($('div','review-status',item.identity_status.replaceAll('_',' ')));row.append(copy,linkActions(item.url));list.append(row)}});d.append(list);card.append(d)}}return card;
 }}

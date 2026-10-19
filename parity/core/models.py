@@ -123,6 +123,8 @@ class PriceResult:
     # Every rate the channel offered for the same stay (total + terms); the
     # compared rate is marked "selected".  Informational only.
     rate_options: list[dict] = field(default_factory=list)
+    # The room type compared when a channel lists several (Booking complexes).
+    room_name: Optional[str] = None
     checked_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def is_priced(self) -> bool:
