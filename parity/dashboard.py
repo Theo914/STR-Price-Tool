@@ -7,6 +7,8 @@ from pathlib import Path, PureWindowsPath
 from typing import Any
 from urllib.parse import urlparse
 
+from parity.theme import MIDNIGHT_CSS
+
 
 MAX_DASHBOARD_LISTINGS = 10
 SUPPORTED_CHANNELS = ("booking", "airbnb")
@@ -374,7 +376,7 @@ def render_dashboard(data: dict[str, Any]) -> str:
     """Render the compact result with portfolio controls hidden from single mode."""
     rendered = _render_dashboard_legacy(data)
     single_mode_css = ".mode,.picker{display:none!important}"
-    return rendered.replace("</style>", f"{single_mode_css}</style>", 1)
+    return rendered.replace("</style>", f"{single_mode_css}{MIDNIGHT_CSS}</style>", 1)
 
 
 def write_dashboard(

@@ -133,3 +133,12 @@ def test_launcher_keeps_polling_through_a_missed_status_update():
     assert "Reconnecting to the local app" in page
     assert "setTimeout(poll,pollFailures<30?2000:5000)" in page
     assert "if(data.status==='running'){run.disabled=true" in page
+
+
+def test_midnight_theme_is_applied_to_launcher():
+    from parity.app import _launcher_html
+    from parity.theme import MIDNIGHT_CSS
+
+    page = _launcher_html("token")
+    assert MIDNIGHT_CSS in page
+    assert page.index(MIDNIGHT_CSS) < page.index("</style>")
